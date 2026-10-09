@@ -8,6 +8,10 @@ import { attachUser, sameOriginGuard } from "./auth/middleware.js";
 import { config, isProd } from "./config.js";
 import { HttpError } from "./lib/errors.js";
 import { authRouter } from "./routes/auth.js";
+import { buildingsRouter } from "./routes/buildings.js";
+import { importRouter } from "./routes/import.js";
+import { roomsRouter } from "./routes/rooms.js";
+import { usersRouter } from "./routes/users.js";
 
 export function createApp() {
   const app = express();
@@ -36,6 +40,10 @@ export function createApp() {
     res.status(dbUp ? 200 : 503).json({ status: dbUp ? "ok" : "degraded", db: dbUp });
   });
   api.use("/auth", authRouter);
+  api.use("/buildings", buildingsRouter);
+  api.use("/rooms", roomsRouter);
+  api.use("/users", usersRouter);
+  api.use("/import", importRouter);
   api.use((_req, _res, next) => next(new HttpError(404, "Not found")));
 
   app.use("/api", api);
@@ -52,7 +60,14 @@ export function createApp() {
 
   const onError: ErrorRequestHandler = (err, _req, res, _next) => {
     if (err instanceof ZodError) {
-      res.status(400).json({ error: "Invalid request", details: err.flatten().fieldErrors });
+      const first = err.issues[0];
+      const where = first?.path.join(".");
+      res.status(400).json({
+        error: first ? `${where ? where + ": " : ""}${first.message}` : "Invalid request",
+        details: err.flatten().fieldErrors,
+      });
+    } else if (typeof err === "object" && err && "code" in err && err.code === 11000) {
+      res.status(409).json({ error: "An entry with the same unique value already exists" });
     } else if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });
     } else {

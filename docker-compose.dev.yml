@@ -32,6 +32,9 @@ services:
       SEED_ADMIN_EMAIL: admin@smartcampus.local
       SEED_ADMIN_PASSWORD: changeme123
       AZURE_ENABLED: ${AZURE_ENABLED:-false}
+      # Mails (password reset, invitations) land in Mailpit: http://localhost:8025
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
     volumes:
       - ./backend:/app
       - backend-node-modules:/app/node_modules
@@ -39,6 +42,13 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "127.0.0.1:8025:8025"
 
   mongo:
     image: mongo:8

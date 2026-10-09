@@ -1,6 +1,6 @@
 import { Schema, model, type HydratedDocument, type InferSchemaType } from "mongoose";
 
-export const ROLES = ["admin", "user"] as const;
+export const ROLES = ["admin", "operator", "staff"] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Ways a user can sign in. `local` = email + password, others are external identity providers. */
@@ -23,10 +23,13 @@ const userSchema = new Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     name: { type: String, required: true, trim: true },
-    role: { type: String, enum: ROLES, default: "user", required: true },
+    role: { type: String, enum: ROLES, default: "staff", required: true },
     // Absent for users that only sign in through SSO.
     passwordHash: { type: String },
     identities: { type: [identitySchema], default: [] },
+    department: { type: String, trim: true },
+    jobTitle: { type: String, trim: true },
+    phone: { type: String, trim: true },
     disabled: { type: Boolean, default: false },
   },
   { timestamps: true },

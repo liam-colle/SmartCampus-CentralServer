@@ -1,42 +1,44 @@
-import { LogOut } from "lucide-react";
-import { useAuth } from "@/auth/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Building2, DoorOpen, Users } from "lucide-react";
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { canEditCampus, useAuth } from "@/auth/AuthContext";
+import { Card, CardContent } from "@/components/ui/card";
+import { useFetch } from "@/lib/useFetch";
+import type { Building, Page, StaffMember } from "@/lib/types";
+
+function Stat({ to, icon, label, value }: { to: string; icon: ReactNode; label: string; value: number | string }) {
+  return (
+    <Link to={to}>
+      <Card className="gap-2 transition-colors hover:border-primary/50">
+        <CardContent className="flex items-center gap-4">
+          <div className="text-muted-foreground [&_svg]:size-6">{icon}</div>
+          <div>
+            <div className="font-mono text-3xl">{value}</div>
+            <div className="text-sm text-muted-foreground">{label}</div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
 
 export function DashboardPage() {
-  const { user, logout } = useAuth();
-  if (!user) return null;
+  const { user } = useAuth();
+  const manager = canEditCampus(user);
+  const buildings = useFetch<{ items: Building[] }>("/buildings");
+  const staff = useFetch<Page<StaffMember>>(manager ? "/users?limit=1" : null);
+
+  const rooms = buildings.data?.items.reduce((n, b) => n + (b.roomCount ?? 0), 0);
 
   return (
-    <div className="backdrop-grid min-h-screen">
-      <header className="flex items-center justify-between border-b px-6 py-4">
-        <span className="font-mono text-sm tracking-[0.35em] uppercase">SmartCampus</span>
-        <Button variant="ghost" size="sm" onClick={() => void logout()}>
-          <LogOut /> Sign out
-        </Button>
-      </header>
-
-      <main className="mx-auto max-w-3xl px-6 py-12">
-        <h1 className="font-mono text-2xl">Welcome, {user.name}</h1>
-        <p className="mt-1 text-muted-foreground">You are signed in. This is where the platform will grow.</p>
-
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="font-mono">Session</CardTitle>
-            <CardDescription>Returned by GET /api/auth/me</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-[6rem_1fr] gap-y-2 font-mono text-sm">
-              <dt className="text-muted-foreground">email</dt>
-              <dd>{user.email}</dd>
-              <dt className="text-muted-foreground">role</dt>
-              <dd>{user.role}</dd>
-              <dt className="text-muted-foreground">id</dt>
-              <dd className="break-all">{user.id}</dd>
-            </dl>
-          </CardContent>
-        </Card>
-      </main>
+    <div>
+      <h1 className="font-mono text-2xl">Welcome, {user?.name}</h1>
+      <p className="mt-1 text-muted-foreground">Campus overview.</p>
+      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        <Stat to="/buildings" icon={<Building2 />} label="Buildings" value={buildings.data?.items.length ?? "–"} />
+        <Stat to="/rooms" icon={<DoorOpen />} label="Rooms" value={rooms ?? "–"} />
+        {manager && <Stat to="/staff" icon={<Users />} label="People" value={staff.data?.total ?? "–"} />}
+      </div>
     </div>
   );
 }

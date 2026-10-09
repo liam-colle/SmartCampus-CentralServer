@@ -1,13 +1,13 @@
-// Usage: pnpm user:create <email> <password> [name] [admin|user]
+// Usage: pnpm user:create <email> <password> [name] [admin|operator|staff]
 import mongoose from "mongoose";
 import { config } from "../config.js";
 import { hashPassword } from "../lib/password.js";
 import { ROLES, UserModel, type Role } from "../models/user.js";
 
-const [email, password, name, role = "user"] = process.argv.slice(2);
+const [email, password, name, role = "staff"] = process.argv.slice(2);
 
 if (!email || !password || !ROLES.includes(role as Role)) {
-  console.error("Usage: pnpm user:create <email> <password> [name] [admin|user]");
+  console.error("Usage: pnpm user:create <email> <password> [name] [admin|operator|staff]");
   process.exit(1);
 }
 

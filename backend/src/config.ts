@@ -17,14 +17,27 @@ const schema = z.object({
   TRUST_PROXY: bool,
 
   SESSION_COOKIE_NAME: z.string().default("sc_sid"),
-  SESSION_TTL_HOURS: z.coerce.number().positive().default(24 * 7),
+  // Hard limit: a session never lives longer than this, however active the user is.
+  SESSION_TTL_HOURS: z.coerce.number().positive().default(12),
+  // Inactivity limit: the session ends after this long without an authenticated request.
+  SESSION_IDLE_MINUTES: z.coerce.number().positive().default(30),
   // Set to true when served over HTTPS.
   COOKIE_SECURE: bool,
 
   // Optional bootstrap admin, created on startup if it does not exist yet.
   SEED_ADMIN_EMAIL: z.string().email().optional(),
-  SEED_ADMIN_PASSWORD: z.string().min(8).optional(),
+  SEED_ADMIN_PASSWORD: z.string().min(10).optional(),
   SEED_ADMIN_NAME: z.string().default("Administrator"),
+
+  // Outgoing mail (password reset, invitations). Without SMTP_HOST, mails are printed to the log.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().default(587),
+  SMTP_SECURE: bool,
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  MAIL_FROM: z.string().default("SmartCampus <no-reply@smartcampus.local>"),
+  RESET_TOKEN_TTL_MINUTES: z.coerce.number().positive().default(60),
+  INVITE_TTL_HOURS: z.coerce.number().positive().default(72),
 
   // Microsoft Azure / Entra ID SSO (not implemented yet, see auth/providers/azure.ts).
   AZURE_ENABLED: bool,

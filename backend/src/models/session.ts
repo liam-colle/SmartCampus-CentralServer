@@ -8,8 +8,11 @@ const sessionSchema = new Schema({
   userAgent: { type: String },
   ip: { type: String },
   createdAt: { type: Date, default: Date.now },
-  // MongoDB removes the document automatically once this date passes.
+  // Sliding expiry (idle timeout), pushed forward on activity. MongoDB deletes the document
+  // once this date passes.
   expiresAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } },
+  // Hard limit that the sliding expiry can never exceed.
+  absoluteExpiresAt: { type: Date, required: true },
 });
 
 export const SessionModel = model("Session", sessionSchema);

@@ -5,9 +5,11 @@ import { resolveExternalUser } from "../auth/identity.js";
 import { requireAuth } from "../auth/middleware.js";
 import { azureProvider } from "../auth/providers/azure.js";
 import { verifyCredentials } from "../auth/providers/local.js";
-import { endSession, startSession } from "../auth/sessions.js";
+import { completeReset, requestReset } from "../auth/passwordReset.js";
+import { endSession, sessionPolicy, startSession } from "../auth/sessions.js";
 import { config } from "../config.js";
 import { HttpError } from "../lib/errors.js";
+import { passwordSchema } from "../lib/http.js";
 import { toPublicUser } from "../models/user.js";
 
 export const authRouter = Router();
@@ -31,7 +33,7 @@ authRouter.get("/providers", (_req, res) => {
 });
 
 authRouter.get("/me", requireAuth, (req, res) => {
-  res.json({ user: req.user });
+  res.json({ user: req.user, session: sessionPolicy });
 });
 
 authRouter.post("/login", loginLimiter, async (req, res) => {
@@ -40,7 +42,30 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
   if (!user) throw new HttpError(401, "Invalid email or password");
 
   await startSession(req, res, user, "local");
-  res.json({ user: toPublicUser(user) });
+  res.json({ user: toPublicUser(user), session: sessionPolicy });
+});
+
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many requests, try again later" },
+});
+
+/** Always answers 204, whether or not the email exists. The mail is sent in the background. */
+authRouter.post("/forgot-password", resetLimiter, (req, res) => {
+  const { email } = z.object({ email: z.string().email() }).parse(req.body);
+  requestReset(email).catch((err) => console.error("Password reset failed", err));
+  res.status(204).end();
+});
+
+authRouter.post("/reset-password", resetLimiter, async (req, res) => {
+  const { token, password } = z
+    .object({ token: z.string().min(10).max(200), password: passwordSchema })
+    .parse(req.body);
+  await completeReset(token, password);
+  res.status(204).end();
 });
 
 authRouter.post("/logout", async (req, res) => {
