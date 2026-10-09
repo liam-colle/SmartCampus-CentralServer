@@ -1,0 +1,59 @@
+# Dev stack with hot reload. Usage: docker compose -f docker-compose.dev.yml up
+# Frontend: http://localhost:5173 (proxies /api to the backend)   Backend: http://localhost:3000
+name: smartcampus-dev
+
+services:
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install && pnpm dev"
+    ports:
+      - "5173:5173"
+    environment:
+      BACKEND_URL: http://backend:3000
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+      - pnpm-store:/root/.local/share/pnpm
+    depends_on:
+      - backend
+
+  backend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install && pnpm dev"
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      MONGO_URI: mongodb://mongo:27017/smartcampus
+      APP_URL: http://localhost:5173
+      SEED_ADMIN_EMAIL: admin@smartcampus.local
+      SEED_ADMIN_PASSWORD: changeme123
+      AZURE_ENABLED: ${AZURE_ENABLED:-false}
+    volumes:
+      - ./backend:/app
+      - backend-node-modules:/app/node_modules
+      - pnpm-store:/root/.local/share/pnpm
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:8
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-dev-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mongo-dev-data:
+  frontend-node-modules:
+  backend-node-modules:
+  pnpm-store:

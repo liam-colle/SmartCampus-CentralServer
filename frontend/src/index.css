@@ -1,0 +1,79 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Palette: near-black gray surfaces, #00a86b as the foreground/accent. Dark only. */
+:root {
+  color-scheme: dark;
+  --radius: 0.5rem;
+
+  --background: #0e0f10;
+  --foreground: #00a86b;
+  --card: #151718;
+  --card-foreground: #00a86b;
+  --popover: #151718;
+  --popover-foreground: #00a86b;
+  --primary: #00a86b;
+  --primary-foreground: #06120d;
+  --secondary: #1d2022;
+  --secondary-foreground: #00a86b;
+  --muted: #1d2022;
+  --muted-foreground: #5f8f7b;
+  --accent: #1a2a23;
+  --accent-foreground: #00a86b;
+  --destructive: #e5484d;
+  --border: #25292b;
+  --input: #2c3033;
+  --ring: #00a86b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    min-height: 100vh;
+  }
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+}
+
+/* Faint green grid with a glow, used as the page backdrop. */
+.backdrop-grid {
+  background-image:
+    radial-gradient(60rem 30rem at 50% -10%, rgb(0 168 107 / 0.12), transparent 70%),
+    linear-gradient(rgb(0 168 107 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(0 168 107 / 0.04) 1px, transparent 1px);
+  background-size: auto, 40px 40px, 40px 40px;
+}
