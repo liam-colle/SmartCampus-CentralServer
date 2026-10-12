@@ -58,7 +58,7 @@ Still to come from the deck: `apps/door`, `apps/edge-agent`. Inside the server, 
 
 Workspace packages are consumed through the `source` export condition in development (`tsx --conditions=source`, no rebuild) and through `dist` in production, so **build packages before typechecking/running tests**: `pnpm typecheck` at the root does it.
 
-Already built: credential-cookie auth (scrypt, hashed opaque sessions in MongoDB, idle + absolute expiry, rate-limited login, Origin check), roles `admin | operator | staff`, password reset/invitations by email, buildings/rooms/people CRUD, room search/filter, CSV import, Azure SSO scaffold (`apps/server/src/auth/providers/azure.ts` throws 501), device protocol/handshake packages, gateway, device enrollment, commands (outbox).
+Already built: credential-cookie auth (scrypt, hashed opaque sessions in MongoDB, idle + absolute expiry, rate-limited login, Origin check), roles `admin | operator | staff`, password reset/invitations by email, buildings/rooms/people CRUD, room search/filter, CSV import, Azure SSO scaffold (`apps/server/src/auth/providers/azure.ts` throws 501), device protocol/handshake packages, gateway, device enrollment, commands (outbox), device management console (`/devices`, live status over `/ws/admin`).
 
 ## Commands
 

@@ -1,8 +1,10 @@
-import { Building2, DoorOpen, FileUp, LayoutDashboard, LogOut, Users } from "lucide-react";
+import { Building2, DoorOpen, FileUp, LayoutDashboard, LogOut, Radio, Users } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { canEditCampus, useAuth } from "@/auth/AuthContext";
 import { IdleWarning } from "@/components/IdleWarning";
+import { OfflineAlerts } from "@/components/OfflineAlerts";
 import { Button } from "@/components/ui/button";
+import { DeviceStatusProvider } from "@/lib/DeviceStatus";
 import { ROLE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -15,10 +17,16 @@ export function AppLayout() {
     { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/rooms", label: "Rooms", icon: DoorOpen },
     { to: "/buildings", label: "Buildings", icon: Building2 },
-    ...(manager ? [{ to: "/staff", label: "Staff", icon: Users }, { to: "/import", label: "CSV import", icon: FileUp }] : []),
+    ...(manager
+      ? [
+          { to: "/devices", label: "Devices", icon: Radio },
+          { to: "/staff", label: "Staff", icon: Users },
+          { to: "/import", label: "CSV import", icon: FileUp },
+        ]
+      : []),
   ];
 
-  return (
+  const page = (
     <div className="backdrop-grid min-h-screen">
       <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-3">
@@ -56,6 +64,10 @@ export function AppLayout() {
         <Outlet />
       </main>
       <IdleWarning />
+      {manager && <OfflineAlerts />}
     </div>
   );
+
+  // The live device channel is only open to admins and operators.
+  return manager ? <DeviceStatusProvider>{page}</DeviceStatusProvider> : page;
 }
