@@ -41,7 +41,7 @@ enrollRouter.post("/", async (req, res) => {
       name: z.string().trim().max(100).optional(),
     })
     .parse(req.body);
-  const request = await requestEnrollment({ ...input, ip: req.ip, userAgent: req.get("user-agent") });
+  const request = await requestEnrollment({ ...input, ip: req.ip?.replace(/^::ffff:/, ""), userAgent: req.get("user-agent") });
   res.status(201).json(request);
 });
 

@@ -1,17 +1,27 @@
-import { Plus, Radio } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Check, PlugZap, Radio, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { ConnectionBadge } from "@/components/DeviceBadges";
-import { ErrorText, Field } from "@/components/Field";
+import { ErrorText } from "@/components/Field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { useDeviceStatus } from "@/lib/DeviceStatus";
-import { computeDrift, DEVICE_TYPE_LABEL, timeAgo, type Device, type Page, type Room } from "@/lib/types";
+import {
+  computeDrift,
+  DEVICE_TYPE_LABEL,
+  formatFingerprint,
+  timeAgo,
+  timeLeft,
+  type Device,
+  type EnrollmentRequest,
+  type Page,
+  type Room,
+} from "@/lib/types";
 import { useFetch, useOnChange } from "@/lib/useFetch";
 
 export function useRoomOptions() {
@@ -28,9 +38,8 @@ export function DevicesPage() {
   const status = useDeviceStatus();
   const devices = useFetch<{ items: Device[] }>("/devices");
   const rooms = useRoomOptions();
-  const [enrolling, setEnrolling] = useState(false);
 
-  // Refetch when a device connects or disconnects so last-seen and reported state stay fresh.
+  // Refetch when a device connects or disconnects, or a request is resolved, so the list stays fresh.
   useOnChange(status.version, devices.reload);
 
   const items = devices.data?.items ?? [];
@@ -40,18 +49,27 @@ export function DevicesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-mono text-2xl">Devices</h1>
-          <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-            <Radio className={status.live ? "size-4 text-primary" : "size-4"} />
-            {status.live ? `Live: ${onlineCount} of ${active} online` : "Live updates unavailable, showing the last known state"}
-          </p>
-        </div>
-        <Button onClick={() => setEnrolling(true)}>
-          <Plus /> Enroll device
-        </Button>
+      <div>
+        <h1 className="font-mono text-2xl">Devices</h1>
+        <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+          <Radio className={status.live ? "size-4 text-primary" : "size-4"} />
+          {status.live ? `Live: ${onlineCount} of ${active} online` : "Live updates unavailable, showing the last known state"}
+        </p>
       </div>
+
+      <section aria-labelledby="requests-title" className="flex flex-col gap-3">
+        <h2 id="requests-title" className="flex items-center gap-2 font-mono text-lg">
+          <PlugZap className="size-5" /> Connection requests
+          {status.requests.length > 0 && <Badge>{status.requests.length}</Badge>}
+        </h2>
+        {status.requests.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No device is waiting. When a new device is started it asks to connect and appears here at once, ready to approve or deny.
+          </p>
+        ) : (
+          status.requests.map((r) => <RequestCard key={r.id} request={r} rooms={rooms.items} onDone={status.reloadRequests} />)
+        )}
+      </section>
 
       <ErrorText>{devices.error}</ErrorText>
 
@@ -93,91 +111,93 @@ export function DevicesPage() {
           {!devices.loading && items.length === 0 && (
             <TableRow>
               <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                No devices yet. Start a device, then use “Enroll device” with the code it shows.
+                No devices yet. Start a device and approve its connection request above.
               </TableCell>
             </TableRow>
           )}
         </TableBody>
       </Table>
-
-      {enrolling && <EnrollDialog rooms={rooms.items} onClose={() => setEnrolling(false)} />}
     </div>
   );
 }
 
-function EnrollDialog({ rooms, onClose }: { rooms: Room[]; onClose: () => void }) {
-  const navigate = useNavigate();
-  const [form, setForm] = useState({ code: "", fingerprint: "", name: "", room: "", groups: "" });
+/** One device asking to connect. The fingerprint is there to compare with the one on the device's own screen. */
+function RequestCard({ request, rooms, onDone }: { request: EnrollmentRequest; rooms: Room[]; onDone: () => void }) {
+  const [name, setName] = useState(request.name);
+  const [room, setRoom] = useState("");
+  const [busy, setBusy] = useState<"approve" | "deny" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  const label = request.name || DEVICE_TYPE_LABEL[request.type];
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
+  async function resolve(action: "approve" | "deny") {
+    if (action === "deny" && !confirm(`Deny the request from ${label}? That key cannot ask again for an hour.`)) return;
+    setBusy(action);
     setError(null);
     try {
-      const device = await api<Device>("/devices/enroll", {
-        body: {
-          code: form.code.replace(/[\s-]/g, "").toUpperCase(),
-          fingerprint: form.fingerprint,
-          name: form.name,
-          ...(form.room && { room: form.room }),
-          groups: form.groups.split(",").map((g) => g.trim()).filter(Boolean),
-        },
+      await api(`/devices/requests/${request.id}/${action}`, {
+        method: "POST",
+        body: action === "approve" ? { ...(name.trim() && { name: name.trim() }), ...(room && { room }) } : {},
       });
-      navigate(`/devices/${device.id}`);
+      onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Enrollment failed");
-      setBusy(false);
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setBusy(null);
+      onDone(); // the request may have been answered by someone else meanwhile
     }
   }
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Enroll a device</DialogTitle>
-          <DialogDescription>
-            A new device shows an 8-character code and the fingerprint of its key. Enter both exactly as shown. The fingerprint must match: it proves the key you approve is the one on the device.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
-          <Field label="Code" htmlFor="e-code">
-            <Input id="e-code" required autoFocus autoComplete="off" spellCheck={false} className="font-mono tracking-widest uppercase" maxLength={12} value={form.code} onChange={set("code")} />
-          </Field>
-          <Field label="Key fingerprint" htmlFor="e-fp" hint="64 hexadecimal characters, spaces optional.">
-            <Input id="e-fp" required autoComplete="off" spellCheck={false} className="font-mono text-xs" value={form.fingerprint} onChange={set("fingerprint")} />
-          </Field>
-          <Field label="Name" htmlFor="e-name">
-            <Input id="e-name" required maxLength={100} placeholder="Door B2-104" value={form.name} onChange={set("name")} />
-          </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Room" htmlFor="e-room">
-              <Select id="e-room" value={form.room} onChange={set("room")}>
-                <option value="">Not assigned</option>
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.building.code} {r.code}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Groups" htmlFor="e-groups" hint="Comma separated.">
-              <Input id="e-groups" placeholder="floor-2, west-wing" value={form.groups} onChange={set("groups")} />
-            </Field>
+    <Card className="gap-4 border-primary/40 py-5">
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 font-medium">
+              {label} <Badge variant="muted">{DEVICE_TYPE_LABEL[request.type]}</Badge>
+            </div>
+            <dl className="mt-2 grid grid-cols-[6rem_1fr] gap-y-1 text-sm">
+              <dt className="text-muted-foreground">Fingerprint</dt>
+              <dd className="font-mono text-xs break-words">{formatFingerprint(request.fingerprint)}</dd>
+              <dt className="text-muted-foreground">From</dt>
+              <dd className="font-mono text-xs">{request.ip ?? "unknown address"}</dd>
+              <dt className="text-muted-foreground">Requested</dt>
+              <dd>
+                {timeAgo(request.requestedAt)} <span className="text-muted-foreground">· {timeLeft(request.expiresAt)}</span>
+              </dd>
+            </dl>
           </div>
-          <ErrorText>{error}</ErrorText>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={onClose}>
-              Cancel
+        </div>
+
+        <div className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <div className="flex flex-col gap-2">
+            <label htmlFor={`n-${request.id}`} className="text-sm font-medium">
+              Name
+            </label>
+            <Input id={`n-${request.id}`} maxLength={100} placeholder={request.id} value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label htmlFor={`r-${request.id}`} className="text-sm font-medium">
+              Room
+            </label>
+            <Select id={`r-${request.id}`} value={room} onChange={(e) => setRoom(e.target.value)}>
+              <option value="">Not assigned</option>
+              {rooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.building.code} {r.code}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => void resolve("approve")} disabled={busy !== null}>
+              <Check /> {busy === "approve" ? "Approving…" : "Approve"}
             </Button>
-            <Button type="submit" disabled={busy}>
-              {busy ? "Enrolling…" : "Approve device"}
+            <Button variant="outline" onClick={() => void resolve("deny")} disabled={busy !== null}>
+              <X /> Deny
             </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </div>
+        </div>
+        <ErrorText>{error}</ErrorText>
+      </CardContent>
+    </Card>
   );
 }

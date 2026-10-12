@@ -2,16 +2,31 @@ import { Building2, DoorOpen, FileUp, LayoutDashboard, LogOut, Radio, Users } fr
 import { NavLink, Outlet } from "react-router-dom";
 import { canEditCampus, useAuth } from "@/auth/AuthContext";
 import { IdleWarning } from "@/components/IdleWarning";
-import { OfflineAlerts } from "@/components/OfflineAlerts";
+import { Notifications } from "@/components/Notifications";
 import { Button } from "@/components/ui/button";
-import { DeviceStatusProvider } from "@/lib/DeviceStatus";
+import { DeviceStatusProvider, useOptionalDeviceStatus } from "@/lib/DeviceStatus";
 import { ROLE_LABEL } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function AppLayout() {
+  const { user } = useAuth();
+  if (!user) return null;
+  // The live device channel is only open to admins and operators.
+  return canEditCampus(user) ? (
+    <DeviceStatusProvider>
+      <Shell />
+    </DeviceStatusProvider>
+  ) : (
+    <Shell />
+  );
+}
+
+function Shell() {
   const { user, logout } = useAuth();
+  const status = useOptionalDeviceStatus();
   if (!user) return null;
   const manager = canEditCampus(user);
+  const waiting = status?.requests.length ?? 0;
 
   const links = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -26,7 +41,7 @@ export function AppLayout() {
       : []),
   ];
 
-  const page = (
+  return (
     <div className="backdrop-grid min-h-screen">
       <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-3">
@@ -45,6 +60,14 @@ export function AppLayout() {
                 }
               >
                 <Icon className="size-4" /> {label}
+                {to === "/devices" && waiting > 0 && (
+                  <span
+                    className="ml-1 rounded-full bg-primary px-1.5 font-mono text-[10px] leading-4 text-primary-foreground"
+                    aria-label={`${waiting} connection request${waiting === 1 ? "" : "s"} waiting`}
+                  >
+                    {waiting}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
@@ -64,10 +87,7 @@ export function AppLayout() {
         <Outlet />
       </main>
       <IdleWarning />
-      {manager && <OfflineAlerts />}
+      {manager && <Notifications />}
     </div>
   );
-
-  // The live device channel is only open to admins and operators.
-  return manager ? <DeviceStatusProvider>{page}</DeviceStatusProvider> : page;
 }
