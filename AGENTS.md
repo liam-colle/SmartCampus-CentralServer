@@ -40,50 +40,58 @@ The reference design is `docs/SmartCampus-CentralServer_Technical_Deck.pdf` (Fre
 
 Open decisions (tracked as GitHub issues labelled `decision`): P-256 vs Ed25519, `ws` vs Socket.IO, display hardware, door behaviour on outage (needs fire-safety sign-off — do not pick a default silently), TTS engine behind an abstract interface.
 
-## Current state vs target
+## Repository layout
 
-Today the repo has two independent **pnpm** projects, not yet the monorepo from the deck:
+A **pnpm workspace** (single root lockfile). Package manager is pnpm, even though the deck says npm workspaces.
 
 ```
-backend/    Express 5 + TypeScript + Mongoose   (REST API, auth, campus data)
-frontend/   React 19 + Vite + Tailwind v4 + shadcn/ui   (admin console)
-Dockerfile  one production image: API + built SPA
-docker-compose.yml       production (app + mongo)
-docker-compose.dev.yml   dev with hot reload (frontend, backend, mongo, mailpit)
-docs/       technical deck
+apps/server/         Express 5 + TypeScript + Mongoose: REST API, auth, campus data, WSS gateway
+apps/web/            React 19 + Vite + Tailwind v4 + shadcn/ui admin console
+apps/device-sim/     Python device simulator (protocol test tool)
+packages/protocol/   @smartcampus/protocol: envelope, zod schemas, handshake messages, ULID
+packages/handshake/  @smartcampus/handshake: ECDSA P-256 + ECDH + HKDF + AES-256-GCM channel
+Dockerfile, docker-compose.yml (prod), docker-compose.dev.yml (dev)
+docs/                technical deck
 ```
 
-Target layout (deck): `apps/web`, `apps/server`, `apps/door`, `apps/edge-agent`, `packages/protocol`, `packages/handshake`, with `apps/server/src/{api,gateway,domain,jobs,infra}`. **Package manager is pnpm** (workspaces), even though the deck says npm workspaces. Do the migration in its own `refactor` commit/PR, with no behaviour changes mixed in.
+Still to come from the deck: `apps/door`, `apps/edge-agent`. Inside the server, `src/routes/` is the deck's `api/`; new code goes in `src/gateway/` (WSS, handshake session, registry) and `src/domain/` (devices, commands), `src/jobs/`, `src/infra/`. Renaming `routes/` to `api/` is a separate pure `refactor` commit.
 
-Already built: credential-cookie auth (scrypt, hashed opaque sessions in MongoDB, idle + absolute expiry, rate-limited login, Origin check), roles `admin | operator | staff`, password reset/invitations by email, buildings/rooms/people CRUD, room search/filter, CSV import, Azure SSO scaffold (routes, identity linking and config exist; `backend/src/auth/providers/azure.ts` throws 501).
+Workspace packages are consumed through the `source` export condition in development (`tsx --conditions=source`, no rebuild) and through `dist` in production, so **build packages before typechecking/running tests**: `pnpm typecheck` at the root does it.
+
+Already built: credential-cookie auth (scrypt, hashed opaque sessions in MongoDB, idle + absolute expiry, rate-limited login, Origin check), roles `admin | operator | staff`, password reset/invitations by email, buildings/rooms/people CRUD, room search/filter, CSV import, Azure SSO scaffold (`apps/server/src/auth/providers/azure.ts` throws 501), device protocol/handshake packages, gateway, device enrollment, commands (outbox).
 
 ## Commands
 
 ```bash
-# Dev stack (hot reload): frontend :5173, backend :3000, mongo :27017, mailpit :8025
+# Dev stack (hot reload): console :5173, API + gateway :3000, mongo :27017, mailpit :8025
 docker compose -f docker-compose.dev.yml up
 # Production
 docker compose up -d --build
 
-# Per project (backend/ or frontend/)
+# Workspace (repo root)
 pnpm install
-pnpm dev
-pnpm typecheck
+pnpm typecheck            # builds packages, then typechecks everything
+pnpm test                 # packages + server tests
 pnpm build
-# backend only: create a user
-pnpm user:create <email> <password> [name] [admin|operator|staff]
+pnpm --filter @smartcampus/server dev
+pnpm --filter @smartcampus/web dev
+pnpm --filter @smartcampus/server user:create <email> <password> [name] [admin|operator|staff]
+pnpm --filter @smartcampus/server keys:generate secrets/server-key.pem
+
+# Protocol test tool (see apps/device-sim/README.md)
+python3 apps/device-sim/sim.py --help
 ```
 
 ## Verification
 
-There is no test suite yet (an issue tracks adding Vitest). Until then, before saying a change is done:
+Vitest covers `packages/*` and the gateway. Before saying a change is done:
 
-1. `pnpm typecheck` and `pnpm build` in every project you touched.
+1. `pnpm typecheck`, `pnpm test` and `pnpm build` at the root.
 2. For API changes, exercise the endpoints against a real MongoDB (dev stack, or an in-memory server) and check both the success path and the permission/validation failures.
 3. For UI changes, say explicitly if you could not run it in a browser.
 4. New logic that is pure (parsers, crypto, protocol schemas, state machines) gets unit tests once Vitest exists. Crypto and handshake code must have tests, including tampering and replay cases.
 
-## Backend conventions (`backend/`)
+## Backend conventions (`apps/server/`)
 
 - ESM + `module: NodeNext`: relative imports **end in `.js`** (`import { x } from "./x.js"`). Express 5: async handlers may throw, no `try/catch` wrapper needed.
 - Config only through `src/config.ts` (zod-validated env). Never read `process.env` elsewhere. New variable → also `.env.example` and `docker-compose.yml`.
@@ -95,7 +103,7 @@ There is no test suite yet (an issue tracks adding Vitest). Until then, before s
 - Sessions are opaque tokens in an httpOnly cookie, stored hashed. All login methods (password, Azure SSO, future) must end in `startSession()`.
 - Logging: `pino` JSON logs once adopted; until then `console`, but never log secrets.
 
-## Frontend conventions (`frontend/`)
+## Frontend conventions (`apps/web/`)
 
 - React + TypeScript strict, `@/` alias for `src/`. Data via `lib/api.ts` (`api()`, 401 handling) and `lib/useFetch.ts`; no new data/state library without a reason.
 - UI is shadcn-style components in `src/components/ui/` (add more with `pnpm dlx shadcn@latest add <name>`), Tailwind v4, tokens in `src/index.css`.
