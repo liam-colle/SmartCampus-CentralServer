@@ -16,6 +16,8 @@ export default defineConfig({
     // The browser only ever talks to this origin, so the session cookie is first-party.
     proxy: {
       "/api": { target: process.env.BACKEND_URL ?? "http://localhost:3000" },
+      // Console realtime channel (device online/offline).
+      "/ws": { target: process.env.BACKEND_URL ?? "http://localhost:3000", ws: true },
     },
   },
 });
