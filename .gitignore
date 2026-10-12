@@ -7,3 +7,4 @@ dist
 secrets/
 __pycache__/
 .venv/
+.vite
