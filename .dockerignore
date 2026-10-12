@@ -4,3 +4,6 @@
 .git
 *.md
 docker-compose*.yml
+secrets
+**/.venv
+**/__pycache__

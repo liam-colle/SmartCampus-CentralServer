@@ -8,6 +8,8 @@ services:
         condition: service_healthy
     ports:
       - "${PORT:-3000}:3000"
+    secrets:
+      - server_key
     environment:
       NODE_ENV: production
       MONGO_URI: mongodb://mongo:27017/${MONGO_DB:-smartcampus}
@@ -25,6 +27,7 @@ services:
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
       SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-}
+      SERVER_KEY_FILE: /run/secrets/server_key
       AZURE_ENABLED: ${AZURE_ENABLED:-false}
       AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
       AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
@@ -42,6 +45,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+# Gateway identity key (PKCS#8 PEM, ECDSA P-256), kept outside the repo.
+# Generate with: pnpm --filter @smartcampus/server keys:generate secrets/server-key.pem
+secrets:
+  server_key:
+    file: ./secrets/server-key.pem
 
 volumes:
   mongo-data:
