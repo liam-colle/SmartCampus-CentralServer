@@ -59,3 +59,63 @@ export interface ImportResult {
 }
 
 export const floorLabel = (f: number) => (f === 0 ? "Ground floor" : f < 0 ? `Basement ${-f}` : `Floor ${f}`);
+
+export const DEVICE_TYPES = ["door", "display", "access"] as const;
+export type DeviceType = (typeof DEVICE_TYPES)[number];
+export const DEVICE_TYPE_LABEL: Record<DeviceType, string> = {
+  door: "Door unit",
+  display: "Faculty display",
+  access: "Access unit",
+};
+
+export interface Device {
+  id: string;
+  type: DeviceType;
+  name: string;
+  status: "active" | "revoked" | "pending";
+  fingerprint: string;
+  /** Mongo id of the room this device is assigned to. */
+  room: string | null;
+  groups: string[];
+  desired: Record<string, unknown>;
+  reported: Record<string, unknown>;
+  telemetry: Record<string, unknown>;
+  online: boolean;
+  lastSeenAt: string | null;
+  createdAt: string;
+}
+
+export interface DeviceCommand {
+  id: string;
+  type: string;
+  payload: unknown;
+  status: "pending" | "sent" | "acked" | "nacked";
+  attempts: number;
+  nackReason: string | null;
+  createdAt: string;
+  ackedAt: string | null;
+}
+
+export const formatFingerprint = (fp: string) => (fp.toUpperCase().match(/.{1,4}/g) ?? []).join(" ");
+
+/** Where the device state differs from what was asked: the digital twin has not converged. */
+export function computeDrift(d: Pick<Device, "desired" | "reported">): { key: string; desired: unknown; reported: unknown }[] {
+  const drift: { key: string; desired: unknown; reported: unknown }[] = [];
+  const desiredRoom = (d.desired.roomStatus as { status?: string } | undefined)?.status;
+  if (desiredRoom !== undefined && desiredRoom !== d.reported.roomStatus) {
+    drift.push({ key: "roomStatus", desired: desiredRoom, reported: d.reported.roomStatus });
+  }
+  if (d.desired.displayConfig !== undefined && JSON.stringify(d.desired.displayConfig) !== JSON.stringify(d.reported.displayConfig)) {
+    drift.push({ key: "displayConfig", desired: d.desired.displayConfig, reported: d.reported.displayConfig });
+  }
+  return drift;
+}
+
+export const timeAgo = (iso: string | null): string => {
+  if (!iso) return "never";
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86_400) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86_400)} d ago`;
+};

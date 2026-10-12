@@ -31,3 +31,13 @@ export function useDebounced<T>(value: T, ms = 300): T {
   }, [value, ms]);
   return v;
 }
+
+/** Runs `fn` when `value` changes after the first render (not on mount). */
+export function useOnChange<T>(value: T, fn: () => void) {
+  const previous = useRef(value);
+  useEffect(() => {
+    if (previous.current === value) return;
+    previous.current = value;
+    fn();
+  }, [value, fn]);
+}
