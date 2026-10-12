@@ -4,14 +4,24 @@ import { z } from "zod";
 import { requireRole } from "../auth/middleware.js";
 import { config } from "../config.js";
 import { enqueueCommand, recentCommands } from "../domain/commands.js";
-import { approveEnrollment, enrollmentStatus, requestEnrollment, revokeDevice } from "../domain/devices.js";
+import {
+  approveRequest,
+  denyRequest,
+  enrollmentStatus,
+  listPendingRequests,
+  requestEnrollment,
+  revokeDevice,
+} from "../domain/devices.js";
 import { registry } from "../gateway/registry.js";
 import { HttpError } from "../lib/errors.js";
 import { objectId } from "../lib/http.js";
-import { DEVICE_TYPES, DeviceModel, deviceDto } from "../models/device.js";
+import { DEVICE_TYPES, DeviceModel, deviceDto, requestDto } from "../models/device.js";
 import { RoomModel } from "../models/room.js";
 
-/** Public: used by a device that has no identity yet. */
+/**
+ * Public: used by a device that has no identity yet. It asks to be enrolled and polls the outcome;
+ * an admin or operator approves or denies the request in the console.
+ */
 export const enrollRouter = Router();
 
 const enrollLimiter = rateLimit({
@@ -31,7 +41,8 @@ enrollRouter.post("/", async (req, res) => {
       name: z.string().trim().max(100).optional(),
     })
     .parse(req.body);
-  res.status(201).json(await requestEnrollment(input));
+  const request = await requestEnrollment({ ...input, ip: req.ip, userAgent: req.get("user-agent") });
+  res.status(201).json(request);
 });
 
 enrollRouter.get("/:deviceId", async (req, res) => {
@@ -49,25 +60,34 @@ const loadDevice = async (id: unknown) => {
 };
 
 devicesRouter.get("/", async (_req, res) => {
-  const devices = await DeviceModel.find({ status: { $ne: "pending" } }).sort({ createdAt: -1 });
+  const devices = await DeviceModel.find({ status: { $in: ["active", "revoked"] } }).sort({ createdAt: -1 });
   res.json({ items: devices.map((d) => deviceDto(d, registry.isOnline(d.deviceId))) });
 });
 
-devicesRouter.post("/enroll", async (req, res) => {
+/** Connection requests waiting for a decision. Declared before "/:id" so "requests" is not read as an id. */
+devicesRouter.get("/requests", async (_req, res) => {
+  res.json({ items: (await listPendingRequests()).map(requestDto) });
+});
+
+devicesRouter.post("/requests/:deviceId/approve", async (req, res) => {
   const input = z
     .object({
-      code: z.string().min(4).max(20),
-      fingerprint: z.string().min(16).max(100),
       name: z.string().trim().min(1).max(100),
-      room: z.string().optional(),
-      groups: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
+      room: z.string().nullable(),
+      groups: z.array(z.string().trim().min(1).max(50)).max(20),
     })
-    .parse(req.body);
+    .partial()
+    .parse(req.body ?? {});
   if (input.room) {
     if (!(await RoomModel.exists({ _id: objectId(input.room) }))) throw new HttpError(400, "Unknown room");
   }
-  const device = await approveEnrollment(input);
-  res.status(201).json(deviceDto(device, false));
+  const device = await approveRequest(String(req.params.deviceId), { ...input, room: input.room ?? undefined });
+  res.json(deviceDto(device, false));
+});
+
+devicesRouter.post("/requests/:deviceId/deny", async (req, res) => {
+  await denyRequest(String(req.params.deviceId));
+  res.status(204).end();
 });
 
 devicesRouter.get("/:id", async (req, res) => {

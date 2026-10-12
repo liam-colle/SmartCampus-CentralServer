@@ -4,6 +4,7 @@ import { createApp } from "./app.js";
 import { config } from "./config.js";
 import { attachGateway } from "./gateway/index.js";
 import { loadServerKey } from "./infra/serverKey.js";
+import { DeviceModel } from "./models/device.js";
 import { seedAdmin } from "./seed.js";
 
 const serverKey = loadServerKey();
@@ -11,6 +12,8 @@ console.log(`Gateway key fingerprint: ${formatFingerprint(serverKey.fingerprint)
 
 await mongoose.connect(config.MONGO_URI);
 console.log("Connected to MongoDB");
+// Brings the device indexes in line with the schema (the enrollment flow changed their definition).
+await DeviceModel.syncIndexes();
 await seedAdmin();
 
 const server = createApp().listen(config.PORT, () => {
