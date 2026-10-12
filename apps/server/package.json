@@ -1,9 +1,8 @@
 {
-  "name": "smartcampus-backend",
+  "name": "@smartcampus/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.12.1",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
@@ -27,10 +26,5 @@
     "@types/nodemailer": "^6.4.17",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }

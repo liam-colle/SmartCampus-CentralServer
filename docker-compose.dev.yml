@@ -1,28 +1,44 @@
 # Dev stack with hot reload. Usage: docker compose -f docker-compose.dev.yml up
-# Frontend: http://localhost:5173 (proxies /api to the backend)   Backend: http://localhost:3000
+# Console: http://localhost:5173 (proxies /api to the server)   API + device gateway: http://localhost:3000
+# Mails: http://localhost:8025   Devices connect to ws://localhost:3000/ws/device
 name: smartcampus-dev
 
+x-node: &node
+  image: node:22-alpine
+  working_dir: /app
+  volumes:
+    - ./:/app
+    # Dependencies live in volumes, never on the host checkout.
+    - node-modules:/app/node_modules
+    - server-node-modules:/app/apps/server/node_modules
+    - web-node-modules:/app/apps/web/node_modules
+    - protocol-node-modules:/app/packages/protocol/node_modules
+    - handshake-node-modules:/app/packages/handshake/node_modules
+    - pnpm-store:/root/.local/share/pnpm
+
 services:
-  frontend:
-    image: node:22-alpine
-    working_dir: /app
-    command: sh -c "corepack enable && pnpm install && pnpm dev"
+  # One-shot: installs dependencies once for the whole workspace.
+  install:
+    <<: *node
+    command: sh -c "corepack enable && pnpm install"
+
+  web:
+    <<: *node
+    command: sh -c "corepack enable && pnpm --filter @smartcampus/web dev"
     ports:
       - "5173:5173"
     environment:
-      BACKEND_URL: http://backend:3000
+      BACKEND_URL: http://server:3000
       CHOKIDAR_USEPOLLING: "true"
-    volumes:
-      - ./frontend:/app
-      - frontend-node-modules:/app/node_modules
-      - pnpm-store:/root/.local/share/pnpm
     depends_on:
-      - backend
+      install:
+        condition: service_completed_successfully
+      server:
+        condition: service_started
 
-  backend:
-    image: node:22-alpine
-    working_dir: /app
-    command: sh -c "corepack enable && pnpm install && pnpm dev"
+  server:
+    <<: *node
+    command: sh -c "corepack enable && pnpm --filter @smartcampus/server dev"
     ports:
       - "3000:3000"
     environment:
@@ -32,14 +48,14 @@ services:
       SEED_ADMIN_EMAIL: admin@smartcampus.local
       SEED_ADMIN_PASSWORD: changeme123
       AZURE_ENABLED: ${AZURE_ENABLED:-false}
-      # Mails (password reset, invitations) land in Mailpit: http://localhost:8025
+      # Mails (password reset, invitations) land in Mailpit.
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
-    volumes:
-      - ./backend:/app
-      - backend-node-modules:/app/node_modules
-      - pnpm-store:/root/.local/share/pnpm
+      # Gateway identity key. Generated on first start in development, stays out of git.
+      SERVER_KEY_FILE: /app/secrets/server-key.pem
     depends_on:
+      install:
+        condition: service_completed_successfully
       mongo:
         condition: service_healthy
       mailpit:
@@ -64,6 +80,9 @@ services:
 
 volumes:
   mongo-dev-data:
-  frontend-node-modules:
-  backend-node-modules:
+  node-modules:
+  server-node-modules:
+  web-node-modules:
+  protocol-node-modules:
+  handshake-node-modules:
   pnpm-store:
