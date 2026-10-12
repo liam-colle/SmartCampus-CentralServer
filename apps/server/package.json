@@ -4,19 +4,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --conditions=source src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "user:create": "tsx src/scripts/create-user.ts"
+    "user:create": "tsx src/scripts/create-user.ts",
+    "keys:generate": "tsx src/scripts/generate-key.ts",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@smartcampus/handshake": "workspace:*",
+    "@smartcampus/protocol": "workspace:*",
     "cookie-parser": "^1.4.7",
     "express": "^5.1.0",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.1.0",
     "mongoose": "^8.16.0",
     "nodemailer": "^7.0.3",
+    "ws": "^8.18.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
@@ -24,7 +29,13 @@
     "@types/express": "^5.0.3",
     "@types/node": "^22.15.0",
     "@types/nodemailer": "^6.4.17",
+    "@types/ws": "^8.18.0",
+    "mongodb-memory-server": "^10.1.0",
     "tsx": "^4.20.0",
-    "typescript": "^5.8.0"
-  }
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  },
+  "files": [
+    "dist"
+  ]
 }

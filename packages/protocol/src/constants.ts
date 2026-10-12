@@ -25,6 +25,8 @@ export const CloseCode = {
   Replaced: 4409,
   /** Device was revoked while connected. */
   Revoked: 4403,
+  /** Too many handshake attempts from one address. */
+  RateLimited: 4429,
   /** Missed pongs. */
   PingTimeout: 4410,
 } as const;

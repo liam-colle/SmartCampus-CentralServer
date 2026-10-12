@@ -24,6 +24,12 @@ const schema = z.object({
   // Set to true when served over HTTPS.
   COOKIE_SECURE: bool,
 
+  // Gateway identity key (PKCS#8 PEM, ECDSA P-256). Devices are provisioned with its public half.
+  // In development it is generated on first start; in production the file must already exist.
+  SERVER_KEY_FILE: z.string().default("secrets/server-key.pem"),
+  // How long a device's enrollment code stays valid.
+  ENROLL_CODE_TTL_MINUTES: z.coerce.number().positive().default(15),
+
   // Optional bootstrap admin, created on startup if it does not exist yet.
   SEED_ADMIN_EMAIL: z.string().email().optional(),
   SEED_ADMIN_PASSWORD: z.string().min(10).optional(),

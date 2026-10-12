@@ -9,6 +9,7 @@ import { config, isProd } from "./config.js";
 import { HttpError } from "./lib/errors.js";
 import { authRouter } from "./routes/auth.js";
 import { buildingsRouter } from "./routes/buildings.js";
+import { devicesRouter, enrollRouter } from "./routes/devices.js";
 import { importRouter } from "./routes/import.js";
 import { roomsRouter } from "./routes/rooms.js";
 import { usersRouter } from "./routes/users.js";
@@ -40,6 +41,8 @@ export function createApp() {
     res.status(dbUp ? 200 : 503).json({ status: dbUp ? "ok" : "degraded", db: dbUp });
   });
   api.use("/auth", authRouter);
+  api.use("/enroll", enrollRouter);
+  api.use("/devices", devicesRouter);
   api.use("/buildings", buildingsRouter);
   api.use("/rooms", roomsRouter);
   api.use("/users", usersRouter);
