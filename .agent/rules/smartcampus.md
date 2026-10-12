@@ -16,14 +16,14 @@ Read `AGENTS.md` at the repository root first: it is the full guideline and the 
 
 ## Project
 
-Central server of Smart Campus: Express + TypeScript + MongoDB backend (`backend/`), React + Vite + Tailwind v4 + shadcn/ui console (`frontend/`), **pnpm** everywhere, Docker Compose for dev (`docker-compose.dev.yml`) and prod (`docker-compose.yml`). Design reference: `docs/SmartCampus-CentralServer_Technical_Deck.pdf` (French): WSS gateway for devices (`ws`), mutual handshake with signed session keys (ECDSA P-256, ECDH, HKDF, AES-256-GCM), outbox + idempotent commands, digital-twin state, shared zod protocol package, GridFS assets, Agenda jobs, pino logs.
+Central server of Smart Campus: Express + TypeScript + MongoDB server (`apps/server/`), React + Vite + Tailwind v4 + shadcn/ui console (`apps/web/`), **pnpm** everywhere, Docker Compose for dev (`docker-compose.dev.yml`) and prod (`docker-compose.yml`). Design reference: `docs/SmartCampus-CentralServer_Technical_Deck.pdf` (French): WSS gateway for devices (`ws`), mutual handshake with signed session keys (ECDSA P-256, ECDH, HKDF, AES-256-GCM), outbox + idempotent commands, digital-twin state, shared zod protocol package, GridFS assets, Agenda jobs, pino logs.
 
 ## Conventions
 
-- Backend: ESM with `.js` import suffixes, config only via `src/config.ts`, zod validation on every input, `HttpError` for failures, thin routers, DTO functions instead of raw documents, authorization enforced server-side (`admin` / `operator` / `staff`).
-- Frontend: strict TypeScript, `@/` alias, `lib/api.ts` + `lib/useFetch.ts`, shadcn components, dark only with near-black surfaces and `#00a86b` as foreground/primary via CSS variable tokens, accessible forms.
+- Server (`apps/server`): ESM with `.js` import suffixes, config only via `src/config.ts`, zod validation on every input, `HttpError` for failures, thin routers, DTO functions instead of raw documents, authorization enforced server-side (`admin` / `operator` / `staff`).
+- Console (`apps/web`): strict TypeScript, `@/` alias, `lib/api.ts` + `lib/useFetch.ts`, shadcn components, dark only with near-black surfaces and `#00a86b` as foreground/primary via CSS variable tokens, accessible forms.
 - Device input is hostile: size-limited, schema-validated, idempotent. Device identity never relies on TLS alone.
 
 ## Before saying done
 
-Run `pnpm typecheck` and `pnpm build` in each project you changed and report failures or anything you could not verify.
+Run `pnpm typecheck`, `pnpm test` and `pnpm build` at the root and report failures or anything you could not verify.

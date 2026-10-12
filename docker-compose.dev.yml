@@ -53,6 +53,8 @@ services:
       SMTP_PORT: "1025"
       # Gateway identity key. Generated on first start in development, stays out of git.
       SERVER_KEY_FILE: /app/secrets/server-key.pem
+      # The protocol test tool enrolls many devices in a row.
+      ENROLL_RATE_LIMIT: "1000"
     depends_on:
       install:
         condition: service_completed_successfully
