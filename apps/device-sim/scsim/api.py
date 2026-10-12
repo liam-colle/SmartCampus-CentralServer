@@ -50,11 +50,22 @@ class Api:
     def login(self, email: str, password: str) -> dict:
         return self._call("POST", "/auth/login", {"email": email, "password": password})
 
-    def approve(self, code: str, fingerprint: str, name: str, room: str | None = None) -> dict:
-        body = {"code": code, "fingerprint": fingerprint, "name": name}
+    def requests(self) -> list[dict]:
+        """Connection requests waiting for a decision."""
+        return self._call("GET", "/devices/requests")["items"]
+
+    def approve(self, device_id: str, name: str | None = None, room: str | None = None, groups: list[str] | None = None) -> dict:
+        body: dict = {}
+        if name:
+            body["name"] = name
         if room:
             body["room"] = room
-        return self._call("POST", "/devices/enroll", body)
+        if groups:
+            body["groups"] = groups
+        return self._call("POST", f"/devices/requests/{device_id}/approve", body)
+
+    def deny(self, device_id: str) -> None:
+        self._call("POST", f"/devices/requests/{device_id}/deny", {})
 
     def device(self, device_id: str) -> dict:
         return self._call("GET", f"/devices/{device_id}")

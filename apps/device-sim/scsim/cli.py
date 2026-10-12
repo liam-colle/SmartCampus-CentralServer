@@ -41,26 +41,37 @@ def cmd_enroll(args) -> int:
     ident.device_id = req["deviceId"]
     ident.save()
 
-    print("\nEnrollment requested. On the console (Devices > Enroll) or via the API, enter:\n")
-    print(f"    code         {req['code']}")
-    print(f"    fingerprint  {format_fingerprint(req['fingerprint'])}")
-    print(f"\ndevice id {req['deviceId']}, valid until {req['expiresAt']}")
-    print(f"identity saved to {ident.path} (contains the private key)\n")
-    if args.wait:
-        print("waiting for approval...", flush=True)
-        deadline = time.time() + args.wait
-        while time.time() < deadline:
-            status = api.enrollment_status(req["deviceId"])
-            if status == "active":
-                print("approved. Start it with: run --name", args.name)
-                return 0
-            if status in ("revoked", "unknown"):
-                print(f"enrollment ended: {status}")
-                return 1
-            time.sleep(2)
-        print("timed out waiting for approval")
-        return 1
-    return 0
+    print("\nConnection request sent. An admin must approve it in the console (Devices > Connection requests).")
+    print(f"\n    key fingerprint  {format_fingerprint(req['fingerprint'])}")
+    print(f"    device id        {req['deviceId']}")
+    print(f"\nThe console shows the same fingerprint: compare them before approving.")
+    print(f"request expires {req['expiresAt']}; identity saved to {ident.path} (contains the private key)\n")
+    if args.no_wait:
+        return 0
+
+    print("waiting for the decision...", flush=True)
+    deadline = time.time() + args.timeout
+    outcome = "timeout"
+    while time.time() < deadline:
+        outcome = api.enrollment_status(req["deviceId"])
+        if outcome != "pending":
+            break
+        time.sleep(2)
+    if outcome == "active":
+        print("approved.")
+        if args.run:
+            return cmd_run(args)
+        print(f"Start it with: run --name {args.name}")
+        return 0
+    messages = {
+        "denied": "the request was denied.",
+        "expired": "the request expired before anyone answered.",
+        "revoked": "the device was revoked.",
+        "unknown": "the server no longer knows this request.",
+        "timeout": "gave up waiting.",
+    }
+    print(messages.get(outcome, f"enrollment ended: {outcome}"))
+    return 1
 
 
 def cmd_run(args) -> int:
@@ -95,10 +106,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--state-dir", default=str(HERE / ".state"), help="where simulated device identities are kept")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    e = sub.add_parser("enroll", help="generate a key pair and request enrollment (prints the code to enter in the console)")
+    e = sub.add_parser("enroll", help="generate a key pair, send a connection request and wait for an admin to approve or deny it")
     e.add_argument("--name", required=True)
     e.add_argument("--type", choices=["door", "display", "access"], default="door")
-    e.add_argument("--wait", type=int, metavar="SECONDS", help="poll until an admin approves it")
+    e.add_argument("--timeout", type=int, default=600, metavar="SECONDS", help="how long to wait for a decision (default 600)")
+    e.add_argument("--no-wait", action="store_true", help="send the request and exit")
+    e.add_argument("--run", action="store_true", help="once approved, keep going and run as the device")
+    e.add_argument("--no-ack", action="store_true", help=argparse.SUPPRESS)
+    e.add_argument("--once", action="store_true", help=argparse.SUPPRESS)
     e.add_argument("--force", action="store_true")
     e.set_defaults(fn=cmd_enroll)
 
