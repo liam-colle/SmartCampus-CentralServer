@@ -29,6 +29,8 @@ const schema = z.object({
   SERVER_KEY_FILE: z.string().default("secrets/server-key.pem"),
   // How long a device's enrollment code stays valid.
   ENROLL_CODE_TTL_MINUTES: z.coerce.number().positive().default(15),
+  // Enrollment requests per address per 15 minutes (the endpoint is public). Raise it for protocol test runs.
+  ENROLL_RATE_LIMIT: z.coerce.number().int().positive().default(20),
 
   // Optional bootstrap admin, created on startup if it does not exist yet.
   SEED_ADMIN_EMAIL: z.string().email().optional(),

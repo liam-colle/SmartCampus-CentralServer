@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { requireRole } from "../auth/middleware.js";
+import { config } from "../config.js";
 import { enqueueCommand, recentCommands } from "../domain/commands.js";
 import { approveEnrollment, enrollmentStatus, requestEnrollment, revokeDevice } from "../domain/devices.js";
 import { registry } from "../gateway/registry.js";
@@ -15,7 +16,7 @@ export const enrollRouter = Router();
 
 const enrollLimiter = rateLimit({
   windowMs: 15 * 60_000,
-  limit: 20,
+  limit: config.ENROLL_RATE_LIMIT,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: { error: "Too many enrollment attempts, try again later" },
