@@ -38,7 +38,7 @@ The single `pnpm-lock.yaml` at the root is committed.
 | Campus | Buildings, rooms, people (staff = user accounts): create, edit, delete. Rooms are searchable and filterable by building, floor and type |
 | Password reset | `POST /api/auth/forgot-password` + `/reset-password`; single-use hashed token by email. Also used for account invitations |
 | Sessions | Idle timeout (`SESSION_IDLE_MINUTES`) and hard limit (`SESSION_TTL_HOURS`), enforced server-side; the UI warns 60 s before signing out |
-| Devices | Console page to enroll devices (code + fingerprint), see who is online live, edit, revoke, send commands and follow their delivery, compare desired and reported state. Offline alerts. Admins and operators only |
+| Devices | Console page: approve or deny connection requests from new devices, see who is online live, edit, revoke, send commands and follow their delivery, compare desired and reported state. Offline alerts. Admins and operators only |
 | CSV import | `/import` page and `POST /api/import/{rooms,users}`; preview (`dryRun`) before writing, per-line errors, upsert |
 
 Dev mails are caught by Mailpit at http://localhost:8025.
@@ -52,8 +52,11 @@ depend on TLS alone. Protocol: `packages/protocol/README.md`. Design: `docs/Smar
 - **Server key**: `SERVER_KEY_FILE` (PKCS#8 PEM). Generated on first start in development
   (`secrets/server-key.pem`, public half in `secrets/server-key.pub`, git-ignored). In production create it with
   `pnpm --filter @smartcampus/server keys:generate secrets/server-key.pem` and mount it as a secret. Devices are provisioned with the public key.
-- **Enrollment**: the device posts its public key to `POST /api/enroll`, shows the returned code and fingerprint, and an admin
-  confirms them with `POST /api/devices/enroll`. `POST /api/devices/:id/revoke` cuts a device off immediately.
+- **Enrollment**: a new device posts its public key to `POST /api/enroll` and waits (it polls `GET /api/enroll/:deviceId`). The request
+  appears live in the console as a **connection request** (type, name, key fingerprint, source address); an admin or operator approves it
+  (optionally naming and placing the device) or denies it. Nothing is typed. Requests expire (`ENROLL_REQUEST_TTL_MINUTES`), at most
+  `MAX_PENDING_ENROLLMENTS` wait at once, and a denied key cannot ask again for an hour. The fingerprint is shown so it can be compared with the one on the device.
+  `POST /api/devices/:id/revoke` cuts a device off immediately.
 - **Commands**: `POST /api/devices/:id/commands {type, payload}` goes through an outbox, is delivered now or replayed on reconnect.
 - **Console channel**: `/ws/admin` (session cookie, admins and operators) pushes device online/offline events.
 - **Test it** without hardware: `python3 apps/device-sim/sim.py selftest` (see `apps/device-sim/README.md`).
