@@ -6,6 +6,7 @@ import asyncio
 import json
 import random
 import sys
+import threading
 import time
 
 import websockets
@@ -110,6 +111,8 @@ class DeviceBehaviour:
         self.state: dict = {}
         # announcementId -> expiresAt in ms (None: until cleared). The door app also hides them by itself at expiry.
         self.announcements: dict[str, int | None] = {}
+        # Card serial numbers typed by the person driving the simulator (see `run --taps`).
+        self.taps: asyncio.Queue[str] | None = None
 
     def report_state(self) -> dict:
         now_ms = int(time.time() * 1000)
@@ -123,6 +126,11 @@ class DeviceBehaviour:
             self.state["displayConfig"] = desired["displayConfig"]
         for announcement_id, a in desired.get("announcements", {}).items():
             self.announcements[announcement_id] = a.get("expiresAt")
+        registration = desired.get("registration")
+        if registration:
+            self.state["registration"] = registration["sessionId"]
+        else:
+            self.state.pop("registration", None)
         # The desired state is complete: no emergency in it means the alert is over, even if the clear was missed.
         emergency = desired.get("emergency")
         if emergency:
@@ -160,6 +168,13 @@ class DeviceBehaviour:
             if self.state.get("emergency") == p["emergencyId"]:
                 self.state.pop("emergency", None)
             log(f"  emergency {p['emergencyId']} cleared")
+        elif t == "registration.mode.set":
+            if p["active"]:
+                self.state["registration"] = p["sessionId"]
+                log("  REGISTRATION MODE: cards presented now are collected, they do not log anyone in")
+            else:
+                self.state.pop("registration", None)
+                log("  registration mode ended")
         elif t == "access.acl.sync":
             log(f"  access list synced: {len(p['rules'])} badge rule(s)")
 
@@ -169,8 +184,32 @@ class DeviceBehaviour:
         self.apply_desired(p["desired"])
         await dev.send_message("state.report", {"state": self.report_state(), "telemetry": {"uptime": int(time.monotonic())}})
 
+        pump = asyncio.create_task(self.pump_taps(dev))
+        try:
+            await self.receive_loop(dev)
+        finally:
+            pump.cancel()
+
+    async def pump_taps(self, dev: SimDevice) -> None:
+        """Presents every typed card to the server, like a reader would."""
+        while self.taps is not None:
+            uid = await self.taps.get()
+            sent = await dev.send_message("event.badge", {"badgeUid": uid, "at": int(time.time() * 1000)})
+            log(f"-> event.badge {uid}  id={sent['id']}")
+
+    def on_card_result(self, p: dict) -> None:
+        if p["maintenance"]:
+            log(f"<- card.result: MAINTENANCE MENU OPEN for {p.get('name', '?')}")
+        else:
+            who = f" ({p['name']})" if p.get("name") else ""
+            log(f"<- card.result: {p['outcome']}{who}, no menu")
+
+    async def receive_loop(self, dev: SimDevice) -> None:
         while True:
             msg = await dev.recv_message(timeout=3600)
+            if msg["type"] == "card.result":
+                self.on_card_result(msg["payload"])
+                continue
             if msg["type"] not in COMMAND_TYPES:
                 log(f"ignoring unexpected message {msg['type']}")
                 continue
@@ -189,12 +228,29 @@ class DeviceBehaviour:
                 log("  (ack withheld: --no-ack)")
 
 
-async def run_device(server: str, ident: DeviceIdentity, server_key: str, ack: bool = True, reconnect: bool = True) -> None:
+def read_taps_from_stdin(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop) -> None:
+    """One card serial number per line on stdin, in any hex notation. A thread because stdin blocks."""
+
+    def reader() -> None:
+        for line in sys.stdin:
+            uid = line.strip()
+            if uid:
+                loop.call_soon_threadsafe(queue.put_nowait, uid)
+
+    threading.Thread(target=reader, daemon=True).start()
+
+
+async def run_device(
+    server: str, ident: DeviceIdentity, server_key: str, ack: bool = True, reconnect: bool = True, taps: bool = False
+) -> None:
     """Connect, behave like a device, reconnect with exponential backoff and jitter (1-60 s)."""
     if not ident.device_id:
         raise SystemExit("this device has no id yet: run `enroll` first")
     server_pub = load_public_key(server_key)
     behaviour = DeviceBehaviour(ident, ack)
+    if taps:
+        behaviour.taps = asyncio.Queue()
+        read_taps_from_stdin(behaviour.taps, asyncio.get_running_loop())
     backoff = BACKOFF_MIN_S
 
     while True:

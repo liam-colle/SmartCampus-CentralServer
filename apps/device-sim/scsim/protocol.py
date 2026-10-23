@@ -32,6 +32,7 @@ COMMAND_TYPES = {
     "emergency.set",
     "emergency.clear",
     "access.acl.sync",
+    "registration.mode.set",
 }
 
 _ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford base32

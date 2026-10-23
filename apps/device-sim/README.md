@@ -19,7 +19,7 @@ server writes it to `secrets/server-key.pub` on first start (or use `--server-ke
 | Command | What it does |
 | --- | --- |
 | `enroll --name door-1 [--type door\|display\|access] [--timeout 600] [--no-wait] [--run]` | Generates an ECDSA P-256 key pair and sends a **connection request** with its public key. It prints the key fingerprint (the console shows the same one) and waits for an admin to approve or deny it in the console, reporting the outcome. `--run` goes straight on to behaving as the device once approved. |
-| `run --name door-1 [--no-ack] [--once]` | Connects, performs the handshake and behaves like a door unit: prints and applies commands, ignores duplicate ids, acknowledges, reports state, reconnects with 1 to 60 s jittered backoff. `--no-ack` withholds acknowledgements so you can watch the server replay. |
+| `run --name door-1 [--no-ack] [--once] [--taps]` | Connects, performs the handshake and behaves like a door unit: prints and applies commands, ignores duplicate ids, acknowledges, reports state, reconnects with 1 to 60 s jittered backoff. `--no-ack` withholds acknowledgements so you can watch the server replay. `--taps` reads card serial numbers from stdin (one per line, any hex notation) and presents them like a reader: the server answers with `card.result`, and the simulator prints `MAINTENANCE MENU OPEN` when the card belongs to an admin or operator. |
 | `show --name door-1` | Prints the saved identity (id, fingerprint). |
 | `selftest` | Runs the full conformance suite (below) against the live server and exits non-zero on failure. |
 
@@ -36,6 +36,17 @@ python3 apps/device-sim/sim.py enroll --name door-1 --run
 #  in the console, open the device and send a command, or POST /api/devices/<id>/commands
 #  {"type":"room.status.set","payload":{"roomId":"B2-104","status":"occupied","label":"Occupied","color":"#f5a524","icon":"user"}}
 ```
+
+## Cards and registration mode
+
+```bash
+python3 apps/device-sim/sim.py enroll --name panel-1 --type access --run   # approve it in the console
+python3 apps/device-sim/sim.py run --name panel-1 --taps
+04:A2:2B:1C        # typed on stdin: a card is presented
+```
+
+In the console, start a card registration on `panel-1` (Students > Register cards): every serial number typed
+while it runs is collected instead of logging anyone in.
 
 ## What `selftest` checks
 
