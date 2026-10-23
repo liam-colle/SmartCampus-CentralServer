@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
+import { audioSettingsSet } from "@smartcampus/protocol";
 import { z } from "zod";
 import { requireRole } from "../auth/middleware.js";
 import { config } from "../config.js";
@@ -130,6 +131,15 @@ devicesRouter.post("/:id/revoke", async (req, res) => {
   const device = await revokeDevice(String(req.params.id));
   await recordAudit(req.user!, "device.revoke", { type: "device", id: device.deviceId }, { name: device.name });
   res.json(deviceDto(device, false));
+});
+
+/** Volume and quiet hours of one device. Enforced by the device, kept in its desired state. */
+devicesRouter.put("/:id/audio-settings", async (req, res) => {
+  const settings = audioSettingsSet.shape.payload.parse(req.body);
+  const device = await loadDevice(req.params.id);
+  await enqueueCommand(device.deviceId, "audio.settings.set", settings);
+  await recordAudit(req.user!, "device.audio-settings", { type: "device", id: device.deviceId }, settings);
+  res.json(settings);
 });
 
 devicesRouter.get("/:id/commands", async (req, res) => {

@@ -17,8 +17,11 @@ const announcementSchema = new Schema(
   {
     // ULID. Also the `announcementId` devices receive, so cancelling and replay refer to the same thing.
     announcementId: { type: String, required: true, unique: true },
+    // text: shown on screens. audio: played on the speakers (an InterCom broadcast of `assetId`).
+    kind: { type: String, enum: ["text", "audio"], default: "text", required: true },
     title: { type: String, trim: true, default: "" },
-    text: { type: String, required: true, trim: true },
+    text: { type: String, trim: true, default: "" },
+    assetId: { type: String },
     priority: { type: String, enum: ANNOUNCE_PRIORITIES, default: "info", required: true },
     targets: { type: targetsSchema, required: true },
     // Devices the targets resolved to when the announcement was created (later enrollments do not receive it).
