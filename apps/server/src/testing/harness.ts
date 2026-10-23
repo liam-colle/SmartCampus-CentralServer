@@ -53,7 +53,14 @@ export async function startHarness() {
     },
   });
 
-  async function login(role: Role): Promise<ApiClient> {
+  // The login endpoint is rate limited, and one session per role is all a test needs.
+  const sessions = new Map<Role, Promise<ApiClient>>();
+  const login = (role: Role): Promise<ApiClient> => {
+    if (!sessions.has(role)) sessions.set(role, signIn(role));
+    return sessions.get(role)!;
+  };
+
+  async function signIn(role: Role): Promise<ApiClient> {
     const email = `${role}@test.local`;
     const existing = await UserModel.findOne({ email });
     if (!existing) await UserModel.create({ email, name: `Test ${role}`, role, passwordHash: await hashPassword(PASSWORD) });
