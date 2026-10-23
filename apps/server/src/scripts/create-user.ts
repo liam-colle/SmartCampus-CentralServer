@@ -1,4 +1,5 @@
 // Usage: pnpm user:create <email> <password> [name] [admin|operator|staff]
+// The role maps to a group: admin and operator join that group, staff joins none.
 import mongoose from "mongoose";
 import { config } from "../config.js";
 import { hashPassword } from "../lib/password.js";
@@ -16,7 +17,7 @@ try {
   await UserModel.create({
     email,
     name: name ?? email,
-    role,
+    groups: role === "staff" ? [] : [role],
     passwordHash: await hashPassword(password),
   });
   console.log(`Created ${role} ${email}`);

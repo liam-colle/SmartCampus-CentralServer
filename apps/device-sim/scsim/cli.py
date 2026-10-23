@@ -78,7 +78,7 @@ def cmd_run(args) -> int:
     ident = DeviceIdentity.load(args.name, Path(args.state_dir))
     server_key = read_server_key(args.server_key)
     try:
-        asyncio.run(run_device(args.server, ident, server_key, ack=not args.no_ack, reconnect=not args.once))
+        asyncio.run(run_device(args.server, ident, server_key, ack=not args.no_ack, reconnect=not args.once, taps=args.taps))
     except KeyboardInterrupt:
         log("stopped")
     return 0
@@ -114,6 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--run", action="store_true", help="once approved, keep going and run as the device")
     e.add_argument("--no-ack", action="store_true", help=argparse.SUPPRESS)
     e.add_argument("--once", action="store_true", help=argparse.SUPPRESS)
+    e.add_argument("--taps", action="store_true", help=argparse.SUPPRESS)
     e.add_argument("--force", action="store_true")
     e.set_defaults(fn=cmd_enroll)
 
@@ -121,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--name", required=True)
     r.add_argument("--no-ack", action="store_true", help="never acknowledge commands (to watch the server replay them)")
     r.add_argument("--once", action="store_true", help="do not reconnect when the connection ends")
+    r.add_argument("--taps", action="store_true", help="read card serial numbers from stdin, one per line, and present them like a reader")
     r.set_defaults(fn=cmd_run)
 
     s = sub.add_parser("show", help="show a simulated device identity")

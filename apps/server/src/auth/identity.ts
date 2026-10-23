@@ -38,7 +38,6 @@ export async function resolveExternalUser(
       user = await UserModel.create({
         email,
         name: profile.name || email,
-        role: "staff",
         identities: [identity],
       });
     } else {

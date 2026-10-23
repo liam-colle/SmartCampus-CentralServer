@@ -13,6 +13,8 @@ const hash = (token: string) => createHash("sha256").update(token).digest("hex")
 
 /** Creates a token (replacing older ones for the user) and mails the link. */
 export async function sendPasswordLink(user: UserDoc, purpose: Purpose): Promise<void> {
+  // Students enrolled with a card only have no mailbox to write to.
+  if (!user.email) throw new HttpError(400, "This person has no email address");
   const token = randomBytes(32).toString("base64url");
   const ttlMs =
     purpose === "invite" ? config.INVITE_TTL_HOURS * 3_600_000 : config.RESET_TOKEN_TTL_MINUTES * 60_000;

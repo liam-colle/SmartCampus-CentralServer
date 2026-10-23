@@ -6,6 +6,7 @@ import { attachGateway } from "./gateway/index.js";
 import { loadServerKey } from "./infra/serverKey.js";
 import { seedRoomStatuses } from "./domain/roomStatus.js";
 import { DeviceModel } from "./models/device.js";
+import { migrateUsers } from "./migrate.js";
 import { seedAdmin } from "./seed.js";
 
 const serverKey = loadServerKey();
@@ -15,6 +16,7 @@ await mongoose.connect(config.MONGO_URI);
 console.log("Connected to MongoDB");
 // Brings the device indexes in line with the schema (the enrollment flow changed their definition).
 await DeviceModel.syncIndexes();
+await migrateUsers();
 await seedAdmin();
 await seedRoomStatuses();
 

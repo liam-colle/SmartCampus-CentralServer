@@ -185,6 +185,69 @@ export const accessAclSync = msg(
   }),
 );
 
+/** What the server decided about a card that was presented to a reader. */
+export const CARD_OUTCOMES = [
+  "maintenance",
+  "recognised",
+  "unknown",
+  "disabled",
+  "captured",
+  "duplicate",
+  "already_registered",
+  "rate_limited",
+] as const;
+export type CardOutcome = (typeof CARD_OUTCOMES)[number];
+
+/** What a maintenance menu may do. `status.set` changes the status of the room the terminal is linked to. */
+export const MAINTENANCE_ACTIONS = ["status.set", "restart", "revoke"] as const;
+export type MaintenanceAction = (typeof MAINTENANCE_ACTIONS)[number];
+
+/** Offered with an accepted card so the menu needs no catalogue of its own. */
+export const maintenanceMenu = z.object({
+  statuses: z
+    .array(z.object({ key: statusKey, label: z.string().max(40), color: hexColor, icon: z.enum(STATUS_ICONS) }))
+    .max(50),
+  /** Only administrators may take the terminal out of service. */
+  canRevoke: z.boolean(),
+});
+
+/**
+ * Answer to an `event.badge`, never queued: a card result that arrives late would open a maintenance
+ * menu for someone who has already walked away. The device opens the menu only when `maintenance` is true.
+ */
+export const cardResult = msg(
+  "card.result",
+  z.object({
+    /** Id of the `event.badge` this answers. */
+    ref: z.string().regex(ULID_REGEX),
+    outcome: z.enum(CARD_OUTCOMES),
+    maintenance: z.boolean(),
+    /** Present when the card belongs to someone, so the reader can greet them. */
+    name: z.string().max(100).optional(),
+    /** Present when `maintenance` is true. */
+    menu: maintenanceMenu.optional(),
+  }),
+);
+
+/** Answer to a `maintenance.action`. Like `card.result` it is never queued. */
+export const maintenanceResult = msg(
+  "maintenance.result",
+  z.object({ ref: z.string().regex(ULID_REGEX), action: z.enum(MAINTENANCE_ACTIONS), ok: z.boolean(), error: z.string().max(200).optional() }),
+);
+
+/**
+ * While active, cards presented to this reader are collected for enrolment instead of being treated
+ * as logins. The device leaves the mode by itself at `expiresAt`, even when it is offline.
+ */
+export const registrationModeSet = msg(
+  "registration.mode.set",
+  z.object({
+    sessionId: z.string().min(1).max(64),
+    active: z.boolean(),
+    expiresAt: z.number().int().optional(),
+  }),
+);
+
 // ---- Device -> server ------------------------------------------------------------------
 
 export const ack = msg("ack", z.object({ ref: z.string().regex(ULID_REGEX) }));
@@ -199,9 +262,19 @@ export const stateReport = msg(
   z.object({ state: record, telemetry: record.optional() }),
 );
 
+/** `badgeUid` is the card's serial number as read. The server normalises it, so any hex notation is fine. */
 export const eventBadge = msg(
   "event.badge",
   z.object({ badgeUid: z.string().min(1).max(64), at: z.number().int(), granted: z.boolean().optional() }),
+);
+
+/**
+ * An action chosen in the maintenance menu. The server accepts it only inside the grant it opened
+ * with the card (same device, still valid, person still allowed), so a device cannot invent one.
+ */
+export const maintenanceAction = msg(
+  "maintenance.action",
+  z.object({ action: z.enum(MAINTENANCE_ACTIONS), status: statusKey.optional() }),
 );
 
 // ---- Unions ----------------------------------------------------------------------------
@@ -218,9 +291,12 @@ export const serverMessage = z.discriminatedUnion("type", [
   emergencySet,
   emergencyClear,
   accessAclSync,
+  cardResult,
+  maintenanceResult,
+  registrationModeSet,
 ]);
 
-export const deviceMessage = z.discriminatedUnion("type", [ack, nack, stateReport, eventBadge]);
+export const deviceMessage = z.discriminatedUnion("type", [ack, nack, stateReport, eventBadge, maintenanceAction]);
 
 export type ServerMessage = z.infer<typeof serverMessage>;
 export type DeviceMessage = z.infer<typeof deviceMessage>;
@@ -239,6 +315,7 @@ export const COMMAND_TYPES = [
   "emergency.set",
   "emergency.clear",
   "access.acl.sync",
+  "registration.mode.set",
 ] as const satisfies readonly ServerMessageType[];
 export type CommandType = (typeof COMMAND_TYPES)[number];
 

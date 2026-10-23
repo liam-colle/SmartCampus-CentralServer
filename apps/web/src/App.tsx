@@ -14,6 +14,7 @@ import { IntercomPage } from "@/pages/IntercomPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { ResetPasswordPage } from "@/pages/ResetPasswordPage";
 import { RoomsPage } from "@/pages/RoomsPage";
+import { StudentsPage } from "@/pages/StudentsPage";
 import { StatusesPage } from "@/pages/StatusesPage";
 import { StaffPage } from "@/pages/StaffPage";
 
@@ -39,6 +40,7 @@ export default function App() {
                 <Route path="/intercom" element={<IntercomPage />} />
                 <Route path="/statuses" element={<StatusesPage />} />
                 <Route path="/staff" element={<StaffPage />} />
+                <Route path="/students" element={<StudentsPage />} />
                 <Route path="/import" element={<ImportPage />} />
               </Route>
             </Route>

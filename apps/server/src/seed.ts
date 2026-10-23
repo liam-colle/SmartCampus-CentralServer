@@ -11,7 +11,7 @@ export async function seedAdmin(): Promise<void> {
   await UserModel.create({
     email,
     name,
-    role: "admin",
+    groups: ["admin"],
     passwordHash: await hashPassword(password),
   });
   console.log(`Seeded admin user ${email}`);

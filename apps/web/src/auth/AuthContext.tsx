@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, setUnauthorizedHandler } from "@/lib/api";
-import type { Role } from "@/lib/types";
+import type { Group, Role } from "@/lib/types";
 
 export interface User {
   id: string;
-  email: string;
+  email: string | null;
   name: string;
   role: Role;
+  groups: Group[];
 }
 
 export interface Providers {

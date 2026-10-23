@@ -2,6 +2,11 @@ export type Role = "admin" | "operator" | "staff";
 
 export const ROLE_LABEL: Record<Role, string> = { admin: "Admin", operator: "Operator", staff: "Staff" };
 
+/** A person can belong to several groups, e.g. a student who is also an operator. */
+export type Group = "admin" | "operator" | "student";
+export const GROUPS: Group[] = ["admin", "operator", "student"];
+export const GROUP_LABEL: Record<Group, string> = { admin: "Administrator", operator: "Operator", student: "Student" };
+
 export const ROOM_TYPES = ["classroom", "lecture_hall", "lab", "office", "meeting", "other"] as const;
 export type RoomType = (typeof ROOM_TYPES)[number];
 export const ROOM_TYPE_LABEL: Record<RoomType, string> = {
@@ -36,9 +41,11 @@ export interface Room {
 
 export interface StaffMember {
   id: string;
-  email: string;
+  email: string | null;
   name: string;
   role: Role;
+  groups: Group[];
+  cardUid: string | null;
   department: string;
   jobTitle: string;
   phone: string;
@@ -280,3 +287,14 @@ export interface EmergencyDelivery {
   /** True when the screen itself reports showing this alert. */
   showing: boolean;
 }
+
+export interface RegistrationSession {
+  id: string;
+  deviceId: string;
+  status: "active" | "closed";
+  expiresAt: string;
+  cards: { cardUid: string; scannedAt: string; ownerName: string | null }[];
+}
+
+/** Card serial numbers read as one hex string are easier to compare in pairs: 04 A2 2B 1C. */
+export const formatCardUid = (uid: string) => (uid.match(/.{1,2}/g) ?? []).join(" ");

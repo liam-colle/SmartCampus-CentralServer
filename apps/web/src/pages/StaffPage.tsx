@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
-import { ROLE_LABEL, type Page, type Role, type StaffMember } from "@/lib/types";
+import { GROUPS, GROUP_LABEL, type Group, type Page, type StaffMember } from "@/lib/types";
 import { useDebounced, useFetch } from "@/lib/useFetch";
 
 const PAGE_SIZE = 25;
@@ -16,19 +16,19 @@ const PAGE_SIZE = 25;
 export function StaffPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  // Operators manage staff accounts only.
-  const assignable: Role[] = isAdmin ? ["staff", "operator", "admin"] : ["staff"];
-  const canManage = (m: StaffMember) => isAdmin || m.role === "staff";
+  // Operators manage students and plain staff, and cannot grant the admin or operator group.
+  const assignable: Group[] = isAdmin ? GROUPS : ["student"];
+  const canManage = (m: StaffMember) => isAdmin || !m.groups.some((g) => g === "admin" || g === "operator");
 
   const [search, setSearch] = useState("");
-  const [role, setRole] = useState("");
+  const [group, setGroup] = useState("");
   const [page, setPage] = useState(1);
   const q = useDebounced(search);
-  useEffect(() => setPage(1), [q, role]);
+  useEffect(() => setPage(1), [q, group]);
 
   const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
   if (q) params.set("q", q);
-  if (role) params.set("role", role);
+  if (group) params.set("group", group);
   const list = useFetch<Page<StaffMember>>(`/users?${params}`);
 
   const [editing, setEditing] = useState<StaffMember | "new" | null>(null);
@@ -64,11 +64,11 @@ export function StaffPage() {
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input aria-label="Search people" placeholder="Search name, email, department…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Select aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)}>
-          <option value="">All roles</option>
-          {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
-            <option key={r} value={r}>
-              {ROLE_LABEL[r]}
+        <Select aria-label="Group" value={group} onChange={(e) => setGroup(e.target.value)}>
+          <option value="">All groups</option>
+          {GROUPS.map((g) => (
+            <option key={g} value={g}>
+              {GROUP_LABEL[g]}
             </option>
           ))}
         </Select>
@@ -82,7 +82,7 @@ export function StaffPage() {
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
-            <TableHead>Role</TableHead>
+            <TableHead>Groups</TableHead>
             <TableHead>Department</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="w-32" />
@@ -95,13 +95,14 @@ export function StaffPage() {
                 {m.name}
                 {m.jobTitle && <div className="text-xs text-muted-foreground">{m.jobTitle}</div>}
               </TableCell>
-              <TableCell className="font-mono text-xs">{m.email}</TableCell>
-              <TableCell>{ROLE_LABEL[m.role]}</TableCell>
+              <TableCell className="font-mono text-xs">{m.email ?? "–"}</TableCell>
+              <TableCell>{m.groups.length ? m.groups.map((g) => GROUP_LABEL[g]).join(", ") : "–"}</TableCell>
               <TableCell>{m.department || "–"}</TableCell>
-              <TableCell className="text-muted-foreground">{m.disabled ? "Disabled" : m.hasPassword ? "Active" : "Invite pending"}</TableCell>
+              <TableCell className="text-muted-foreground">{m.disabled ? "Disabled" : m.hasPassword ? "Active" : m.email ? "Invite pending" : "Card only"}</TableCell>
               <TableCell>
                 {canManage(m) && (
                   <div className="flex justify-end gap-1">
+                    {m.email && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -111,6 +112,7 @@ export function StaffPage() {
                     >
                       <Mail />
                     </Button>
+                    )}
                     <Button variant="ghost" size="icon" aria-label={`Edit ${m.name}`} onClick={() => setEditing(m)}>
                       <Pencil />
                     </Button>
@@ -155,7 +157,7 @@ export function StaffPage() {
       {editing && (
         <StaffDialog
           member={editing === "new" ? null : editing}
-          roles={assignable}
+          assignable={assignable}
           self={editing !== "new" && editing.id === user?.id}
           onClose={() => setEditing(null)}
           onSaved={() => {
@@ -170,13 +172,13 @@ export function StaffPage() {
 
 function StaffDialog({
   member,
-  roles,
+  assignable,
   self,
   onClose,
   onSaved,
 }: {
   member: StaffMember | null;
-  roles: Role[];
+  assignable: Group[];
   self: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -184,7 +186,8 @@ function StaffDialog({
   const [form, setForm] = useState({
     name: member?.name ?? "",
     email: member?.email ?? "",
-    role: (member?.role ?? "staff") as Role,
+    groups: member?.groups ?? ([] as Group[]),
+    cardUid: member?.cardUid ?? "",
     department: member?.department ?? "",
     jobTitle: member?.jobTitle ?? "",
     phone: member?.phone ?? "",
@@ -200,15 +203,18 @@ function StaffDialog({
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { password, sendInvite, disabled, ...fields } = form;
+    const { password, sendInvite, disabled, cardUid, email, ...fields } = form;
     try {
       if (member) {
+        // An empty card field removes the card.
         await api(`/users/${member.id}`, {
           method: "PATCH",
-          body: { ...fields, disabled, ...(password && { password }) },
+          body: { ...fields, email: email || undefined, cardUid: cardUid || null, disabled, ...(password && { password }) },
         });
       } else {
-        await api("/users", { body: { ...fields, ...(password && { password }), sendInvite } });
+        await api("/users", {
+          body: { ...fields, email: email || undefined, ...(cardUid && { cardUid }), ...(password && { password }), sendInvite },
+        });
       }
       onSaved();
     } catch (err) {
@@ -228,18 +234,33 @@ function StaffDialog({
             <Field label="Name" htmlFor="s-name">
               <Input id="s-name" required maxLength={100} value={form.name} onChange={set("name")} />
             </Field>
-            <Field label="Role" htmlFor="s-role">
-              <Select id="s-role" value={form.role} disabled={self} onChange={set("role")}>
-                {roles.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABEL[r]}
-                  </option>
-                ))}
-              </Select>
+            <Field label="Email" htmlFor="s-email" hint="Not needed for someone who only uses a card.">
+              <Input id="s-email" type="email" value={form.email} onChange={set("email")} />
             </Field>
           </div>
-          <Field label="Email" htmlFor="s-email">
-            <Input id="s-email" type="email" required value={form.email} onChange={set("email")} />
+          <fieldset className="flex flex-col gap-2" disabled={self}>
+            <legend className="mb-1 text-sm font-medium">Groups</legend>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {GROUPS.map((g) => (
+                <label key={g} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="accent-primary"
+                    checked={form.groups.includes(g)}
+                    // Keep a group the operator cannot grant as it is, so saving does not silently drop it.
+                    disabled={!assignable.includes(g)}
+                    onChange={(e) => setForm({ ...form, groups: e.target.checked ? [...form.groups, g] : form.groups.filter((x) => x !== g) })}
+                  />
+                  {GROUP_LABEL[g]}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Administrators and operators open the maintenance menu when their card is read. A person can be a student and an operator.
+            </p>
+          </fieldset>
+          <Field label="Card serial number" htmlFor="s-card" hint="Hex, any notation (04:A2:2B:1C). Empty removes the card.">
+            <Input id="s-card" className="font-mono" maxLength={40} value={form.cardUid} onChange={set("cardUid")} />
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Department" htmlFor="s-dept">

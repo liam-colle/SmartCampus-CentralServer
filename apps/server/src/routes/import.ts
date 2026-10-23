@@ -1,15 +1,15 @@
 import express, { Router, type Request } from "express";
 import { z } from "zod";
 import { requireRole } from "../auth/middleware.js";
-import { canManageRole } from "../auth/permissions.js";
+import { canManageGroups } from "../auth/permissions.js";
 import { sendPasswordLink } from "../auth/passwordReset.js";
 import { HttpError } from "../lib/errors.js";
 import { parseTable, type CsvRow } from "../lib/csv.js";
 import { BuildingModel } from "../models/building.js";
 import { ROOM_TYPES, RoomModel } from "../models/room.js";
-import { UserModel } from "../models/user.js";
+import { ROLES, UserModel, roleOf, withRole, type Group } from "../models/user.js";
 import { roomInput } from "./rooms.js";
-import { userFields } from "./users.js";
+import { personFields } from "./users.js";
 
 /**
  * CSV import. Send the raw CSV as the request body (Content-Type: text/csv).
@@ -98,7 +98,8 @@ importRouter.post("/users", async (req, res) => {
   const rows = readBody(req, ["email", "name"]);
   const result: ImportResult = { dryRun, total: rows.length, created: 0, updated: 0, errors: [] };
 
-  const rowSchema = z.object(userFields).extend({ role: userFields.role.default("staff") });
+  // The CSV keeps its "role" column; it sets the admin/operator group and leaves other groups alone.
+  const rowSchema = z.object(personFields).extend({ role: z.enum(ROLES).default("staff") });
   const seen = new Set<string>();
 
   for (const { line, data } of rows) {
@@ -111,28 +112,31 @@ importRouter.post("/users", async (req, res) => {
         jobTitle: data.jobtitle,
         phone: data.phone,
       });
-      if (!canManageRole(actor, input.role)) throw new Error(`You cannot import "${input.role}" accounts`);
+      const existing = await UserModel.findOne({ email: input.email });
+      const groups = withRole((existing?.groups ?? []) as Group[], input.role);
+      if (!canManageGroups(actor, groups)) throw new Error(`You cannot import "${input.role}" accounts`);
       if (seen.has(input.email)) throw new Error("Duplicate of an earlier row in this file");
       seen.add(input.email);
 
-      const existing = await UserModel.findOne({ email: input.email });
-      if (existing && !canManageRole(actor, existing.role)) {
+      if (existing && !canManageGroups(actor, existing.groups as Group[])) {
         throw new Error("Existing account you cannot manage");
       }
+      const currentRole = existing ? roleOf(existing.groups as Group[]) : input.role;
       // Never let an import demote the last admin, lock someone out or touch the caller's own role.
-      if (existing && existing.id === actor.id && input.role !== existing.role) {
+      if (existing && existing.id === actor.id && input.role !== currentRole) {
         throw new Error("You cannot change your own role");
       }
-      if (existing?.role === "admin" && input.role !== "admin") {
+      if (currentRole === "admin" && input.role !== "admin") {
         throw new Error("Change an admin's role from the staff page, not by import");
       }
 
+      const { role: _role, ...fields } = input;
       if (!dryRun) {
         if (existing) {
-          existing.set(input);
+          existing.set({ ...fields, groups });
           await existing.save();
         } else {
-          const user = await UserModel.create(input);
+          const user = await UserModel.create({ ...fields, groups });
           if (sendInvites) await sendPasswordLink(user, "invite");
         }
       }

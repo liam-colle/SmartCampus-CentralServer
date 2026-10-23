@@ -13,6 +13,7 @@ const STATE_COMMAND_TYPES: readonly CommandType[] = [
   "room.info.set",
   "display.config.set",
   "audio.settings.set",
+  "registration.mode.set",
 ];
 
 /** An emergency start and its end replace one another: only the newest of the two is still true. */
@@ -64,6 +65,7 @@ async function updateDesiredFor(deviceId: string, type: CommandType, payload: Re
   else if (type === "room.info.set") await patchDesired(deviceId, { room: payload });
   else if (type === "display.config.set") await patchDesired(deviceId, { displayConfig: payload.config });
   else if (type === "audio.settings.set") await patchDesired(deviceId, { audioSettings: payload });
+  else if (type === "registration.mode.set") await patchDesired(deviceId, { registration: payload.active ? payload : null });
   else if (type === "emergency.set") await patchDesired(deviceId, { emergency: payload });
   else if (type === "emergency.clear") await patchDesired(deviceId, { emergency: null });
 }
