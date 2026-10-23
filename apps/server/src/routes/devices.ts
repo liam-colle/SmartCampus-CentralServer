@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
-import { audioSettingsSet } from "@smartcampus/protocol";
+import { audioSettingsSet, displayConfig } from "@smartcampus/protocol";
 import { z } from "zod";
 import { requireRole } from "../auth/middleware.js";
 import { config } from "../config.js";
 import { enqueueCommand, recentCommands } from "../domain/commands.js";
+import { copyDisplayConfig, currentDisplayConfig, setDisplayConfig } from "../domain/displayConfig.js";
 import { pushRoomToDevice } from "../domain/roomStatus.js";
 import { recordAudit } from "../lib/audit.js";
 import {
@@ -131,6 +132,26 @@ devicesRouter.post("/:id/revoke", async (req, res) => {
   const device = await revokeDevice(String(req.params.id));
   await recordAudit(req.user!, "device.revoke", { type: "device", id: device.deviceId }, { name: device.name });
   res.json(deviceDto(device, false));
+});
+
+/** What the screen is meant to show and how. Night sleep is part of it. */
+devicesRouter.get("/:id/display-config", async (req, res) => {
+  const device = await loadDevice(req.params.id);
+  res.json(await currentDisplayConfig(device.deviceId));
+});
+
+devicesRouter.put("/:id/display-config", async (req, res) => {
+  const config = displayConfig.parse(req.body);
+  const device = await loadDevice(req.params.id);
+  await setDisplayConfig(device.deviceId, config, req.user!);
+  res.json(config);
+});
+
+/** Duplicates this screen's configuration to others. The answer lists the outcome per target. */
+devicesRouter.post("/:id/display-config/copy", async (req, res) => {
+  const { targetIds } = z.object({ targetIds: z.array(z.string().min(1).max(40)).min(1).max(100) }).parse(req.body);
+  const device = await loadDevice(req.params.id);
+  res.json({ results: await copyDisplayConfig(device.deviceId, targetIds, req.user!) });
 });
 
 /** Volume and quiet hours of one device. Enforced by the device, kept in its desired state. */
