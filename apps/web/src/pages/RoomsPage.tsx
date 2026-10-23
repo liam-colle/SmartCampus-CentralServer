@@ -1,15 +1,18 @@
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { History, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { canEditCampus, useAuth } from "@/auth/AuthContext";
 import { ErrorText, Field } from "@/components/Field";
+import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
-import { floorLabel, ROOM_TYPES, ROOM_TYPE_LABEL, type Building, type Page, type Room, type RoomType } from "@/lib/types";
-import { useDebounced, useFetch } from "@/lib/useFetch";
+import { useOptionalDeviceStatus } from "@/lib/DeviceStatus";
+import { floorLabel, ROOM_TYPES, ROOM_TYPE_LABEL, timeAgo, type Building, type Page, type Room, type RoomStatusDef, type RoomType, type StatusChange } from "@/lib/types";
+import { useDebounced, useFetch, useOnChange } from "@/lib/useFetch";
 
 const PAGE_SIZE = 25;
 
@@ -36,6 +39,12 @@ export function RoomsPage() {
   const buildings = useFetch<{ items: Building[] }>("/buildings");
   const floors = useFetch<{ items: number[] }>(`/rooms/floors${building ? `?building=${building}` : ""}`);
   const rooms = useFetch<Page<Room>>(`/rooms?${params}`);
+  const statuses = useFetch<{ items: RoomStatusDef[] }>("/room-statuses");
+  const [history, setHistory] = useState<Room | null>(null);
+
+  // A status changed elsewhere (another console, an API call) shows up without a reload.
+  const live = useOptionalDeviceStatus();
+  useOnChange(live?.version ?? 0, rooms.reload);
 
   const [editing, setEditing] = useState<Room | "new" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -57,19 +66,33 @@ export function RoomsPage() {
     }
   }
 
+  async function changeStatus(r: Room, status: string) {
+    setActionError(null);
+    try {
+      await api(`/rooms/${r.id}/status`, { method: "PUT", body: { status } });
+      rooms.reload();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Could not change the status");
+    }
+  }
+
+  const statusOf = (key: string) => statuses.data?.items.find((s) => s.key === key);
   const total = rooms.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Rooms</h1>
-        {editable && (
-          <Button onClick={() => setEditing("new")}>
-            <Plus /> Add room
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Rooms"
+        description="Search by building, floor or type. The status is what the door screen of the room shows."
+        actions={
+          editable && (
+            <Button onClick={() => setEditing("new")}>
+              <Plus /> Add room
+            </Button>
+          )
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="relative">
@@ -113,6 +136,7 @@ export function RoomsPage() {
             <TableHead>Floor</TableHead>
             <TableHead>Type</TableHead>
             <TableHead className="text-right">Capacity</TableHead>
+            <TableHead>Status</TableHead>
             {editable && <TableHead className="w-24" />}
           </TableRow>
         </TableHeader>
@@ -125,9 +149,25 @@ export function RoomsPage() {
               <TableCell>{floorLabel(r.floor)}</TableCell>
               <TableCell>{ROOM_TYPE_LABEL[r.type]}</TableCell>
               <TableCell className="text-right font-mono">{r.capacity ?? "–"}</TableCell>
+              <TableCell>
+                {editable ? (
+                  <Select aria-label={`Status of ${r.code}`} className="h-8 w-40" value={r.status} onChange={(e) => void changeStatus(r, e.target.value)}>
+                    {statuses.data?.items.map((s) => (
+                      <option key={s.key} value={s.key}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  statusOf(r.status) && <StatusBadge label={statusOf(r.status)!.label} color={statusOf(r.status)!.color} icon={statusOf(r.status)!.icon} />
+                )}
+              </TableCell>
               {editable && (
                 <TableCell>
                   <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="icon" aria-label={`Status history of ${r.code}`} onClick={() => setHistory(r)}>
+                      <History />
+                    </Button>
                     <Button variant="ghost" size="icon" aria-label={`Edit ${r.code}`} onClick={() => setEditing(r)}>
                       <Pencil />
                     </Button>
@@ -141,7 +181,7 @@ export function RoomsPage() {
           ))}
           {!rooms.loading && rooms.data?.items.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+              <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                 No rooms match.
               </TableCell>
             </TableRow>
@@ -161,6 +201,8 @@ export function RoomsPage() {
           </Button>
         </div>
       </div>
+
+      {history && <HistoryDialog room={history} onClose={() => setHistory(null)} />}
 
       {editing && (
         <RoomDialog
@@ -281,6 +323,37 @@ function RoomDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function HistoryDialog({ room, onClose }: { room: Room; onClose: () => void }) {
+  const history = useFetch<{ items: StatusChange[] }>(`/rooms/${room.id}/status-history`);
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            Status history of {room.building.code} {room.code}
+          </DialogTitle>
+        </DialogHeader>
+        <ErrorText>{history.error}</ErrorText>
+        {history.data?.items.length === 0 && <p className="text-sm text-muted-foreground">No change yet.</p>}
+        <ol className="flex max-h-80 flex-col divide-y overflow-y-auto">
+          {history.data?.items.map((c) => (
+            <li key={c.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <StatusBadge label={c.label} color={c.color} />
+              <span className="text-right text-muted-foreground">
+                {c.by}
+                <br />
+                <time dateTime={c.at} title={new Date(c.at).toLocaleString()}>
+                  {timeAgo(c.at)}
+                </time>
+              </span>
+            </li>
+          ))}
+        </ol>
       </DialogContent>
     </Dialog>
   );
