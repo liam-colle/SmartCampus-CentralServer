@@ -66,7 +66,7 @@ export async function createAnnouncement(input: AnnouncementInput, actor: Actor)
 /** Takes an announcement off every screen and out of their desired state. */
 export async function cancelAnnouncement(announcementId: string, actor: Actor) {
   const announcement = await AnnouncementModel.findOneAndUpdate(
-    { announcementId, status: "active" },
+    { announcementId, kind: "text", status: "active" },
     { $set: { status: "cancelled", cancelledAt: new Date() } },
     { new: true },
   );
@@ -86,8 +86,8 @@ export async function cancelAnnouncement(announcementId: string, actor: Actor) {
 }
 
 /** Per device delivery of one announcement, from the outbox. */
-export async function deliveryOf(announcementId: string, deviceIds: string[]) {
-  const commands = await CommandModel.find({ type: "announce.show", "payload.announcementId": announcementId }).lean();
+export async function deliveryOf(announcementId: string, deviceIds: string[], type: "announce.show" | "audio.play") {
+  const commands = await CommandModel.find({ type, "payload.announcementId": announcementId }).lean();
   const byDevice = new Map(commands.map((c) => [c.deviceId, c.status]));
   const devices = await DeviceModel.find({ deviceId: { $in: deviceIds } }, { deviceId: 1, name: 1 }).lean();
   return devices.map((d) => ({ deviceId: d.deviceId, name: d.name || d.deviceId, delivery: byDevice.get(d.deviceId) ?? "pending" }));

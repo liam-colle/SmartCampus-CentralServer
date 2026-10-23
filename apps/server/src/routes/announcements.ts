@@ -24,6 +24,8 @@ const announcementInput = z.object({
 
 const dto = (a: InstanceType<typeof AnnouncementModel>) => ({
   id: a.announcementId,
+  kind: a.kind,
+  assetId: a.assetId ?? null,
   title: a.title,
   text: a.text,
   priority: a.priority,
@@ -36,10 +38,11 @@ const dto = (a: InstanceType<typeof AnnouncementModel>) => ({
 });
 
 announcementsRouter.get("/", async (req, res) => {
-  const { page, limit } = pagination.parse(req.query);
+  const { page, limit, kind } = pagination.extend({ kind: z.enum(["text", "audio"]).optional() }).parse(req.query);
+  const filter = kind ? { kind } : {};
   const [items, total] = await Promise.all([
-    AnnouncementModel.find().sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
-    AnnouncementModel.countDocuments(),
+    AnnouncementModel.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    AnnouncementModel.countDocuments(filter),
   ]);
   res.json({ items: items.map(dto), total, page, limit });
 });
@@ -47,7 +50,7 @@ announcementsRouter.get("/", async (req, res) => {
 announcementsRouter.get("/:id", async (req, res) => {
   const a = await AnnouncementModel.findOne({ announcementId: String(req.params.id) });
   if (!a) throw new HttpError(404, "Announcement not found");
-  res.json({ ...dto(a), delivery: await deliveryOf(a.announcementId, a.deviceIds) });
+  res.json({ ...dto(a), delivery: await deliveryOf(a.announcementId, a.deviceIds, a.kind === "audio" ? "audio.play" : "announce.show") });
 });
 
 announcementsRouter.post("/", canWrite, async (req, res) => {
