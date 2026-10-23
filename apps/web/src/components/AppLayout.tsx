@@ -2,6 +2,7 @@ import {
   Building2,
   DoorOpen,
   FileUp,
+  GraduationCap,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -71,6 +72,7 @@ function navGroups(manager: boolean): { title: string; items: NavItem[] }[] {
             title: "Administration",
             items: [
               { to: "/staff", label: "Staff", icon: Users },
+              { to: "/students", label: "Students", icon: GraduationCap },
               { to: "/import", label: "CSV import", icon: FileUp },
             ],
           },
