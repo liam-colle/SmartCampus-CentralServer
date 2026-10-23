@@ -7,6 +7,7 @@ import { ZodError } from "zod";
 import { attachUser, sameOriginGuard } from "./auth/middleware.js";
 import { config, isProd } from "./config.js";
 import { HttpError } from "./lib/errors.js";
+import { announcementsRouter } from "./routes/announcements.js";
 import { authRouter } from "./routes/auth.js";
 import { buildingsRouter } from "./routes/buildings.js";
 import { devicesRouter, enrollRouter } from "./routes/devices.js";
@@ -45,6 +46,7 @@ export function createApp() {
   api.use("/enroll", enrollRouter);
   api.use("/devices", devicesRouter);
   api.use("/buildings", buildingsRouter);
+  api.use("/announcements", announcementsRouter);
   api.use("/rooms", roomsRouter);
   api.use("/room-statuses", roomStatusesRouter);
   api.use("/users", usersRouter);

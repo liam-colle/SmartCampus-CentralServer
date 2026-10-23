@@ -132,9 +132,18 @@ export async function activePublicKey(deviceId: string): Promise<string | null> 
   return d?.publicKey ?? null;
 }
 
+/** The full desired state sent on connection. Announcements that already expired are left out. */
 export async function desiredState(deviceId: string): Promise<Record<string, unknown>> {
   const d = await DeviceModel.findOne({ deviceId }, { desired: 1 });
-  return (d?.desired as Record<string, unknown> | undefined) ?? {};
+  const desired = { ...((d?.desired as Record<string, unknown> | undefined) ?? {}) };
+  const announcements = desired.announcements as Record<string, { expiresAt?: number }> | undefined;
+  if (announcements) {
+    const now = Date.now();
+    desired.announcements = Object.fromEntries(
+      Object.entries(announcements).filter(([, a]) => a.expiresAt === undefined || a.expiresAt > now),
+    );
+  }
+  return desired;
 }
 
 /** Merges into the desired state (the digital twin target). */
