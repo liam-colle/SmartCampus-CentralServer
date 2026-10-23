@@ -119,12 +119,20 @@ class DeviceBehaviour:
         t, p = msg["type"], msg["payload"]
         if t == "room.status.set":
             self.state["roomStatus"] = p["status"]
-            log(f"  room {p['roomId']} is now {p['status']}")
+            log(f"  room {p['roomId']} is now {p['label']} ({p['status']}, {p['color']})")
+        elif t == "room.info.set":
+            self.state["room"] = p["code"]
+            log(f"  linked to room {p['code']} ({p['building']}, floor {p['floor']})")
+        elif t == "audio.settings.set":
+            self.state["volume"] = p["volume"]
+            log(f"  volume {p['volume']}, quiet hours {p['quietHours']}")
+        elif t == "announce.clear":
+            log(f"  announcement {p['announcementId']} cleared")
         elif t == "display.config.set":
             self.state["displayConfig"] = p["config"]
             log(f"  display config updated: {p['config']}")
         elif t == "announce.show":
-            log(f"  ANNOUNCEMENT [{p.get('priority', 'normal')}] {p.get('title') or ''} {p['text']}")
+            log(f"  ANNOUNCEMENT [{p.get('priority', 'info')}] {p.get('title') or ''} {p['text']}")
         elif t == "audio.play":
             log(f"  would download asset {p['assetId']} ({p['size']} bytes) and verify sha256 {p['sha256'][:12]}...")
         elif t == "access.acl.sync":

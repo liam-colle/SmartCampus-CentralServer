@@ -34,7 +34,7 @@ python3 apps/device-sim/sim.py enroll --name door-1 --run
 #  -> the request appears in the console (Devices > Connection requests) with the same fingerprint.
 #     Approve it there: the simulator connects by itself.
 #  in the console, open the device and send a command, or POST /api/devices/<id>/commands
-#  {"type":"room.status.set","payload":{"roomId":"B2-104","status":"occupied"}}
+#  {"type":"room.status.set","payload":{"roomId":"B2-104","status":"occupied","label":"Occupied","color":"#f5a524","icon":"user"}}
 ```
 
 ## What `selftest` checks

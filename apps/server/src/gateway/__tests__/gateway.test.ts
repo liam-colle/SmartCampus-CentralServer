@@ -25,6 +25,7 @@ let mongo: MongoMemoryServer;
 let http: Server;
 let gateway: ReturnType<typeof attachGateway>;
 let url: string;
+const occupied = { roomId: "B2-104", status: "occupied", label: "Occupied", color: "#f5a524", icon: "user" } as const;
 const serverKey = generateIdentity();
 const serverPublicKey = publicKeyOf(serverKey.privateKey);
 
@@ -235,9 +236,9 @@ describe("live connection", () => {
     await dev.ready;
     await dev.next("session.ready");
 
-    await enqueueCommand(deviceId, "room.status.set", { roomId: "B2-104", status: "occupied" });
+    await enqueueCommand(deviceId, "room.status.set", occupied);
     const cmd = await dev.next("room.status.set");
-    expect(cmd.payload).toEqual({ roomId: "B2-104", status: "occupied" });
+    expect(cmd.payload).toEqual(occupied);
 
     dev.send("ack", { ref: cmd.id });
     await new Promise((r) => setTimeout(r, 150));
@@ -247,8 +248,8 @@ describe("live connection", () => {
 
   it("replays unacknowledged commands on reconnect, with the same id, and never an acked one", async () => {
     const { identity, deviceId } = await enrolled();
-    await enqueueCommand(deviceId, "announce.show", { announcementId: "a1", text: "Fire drill at 10:00", priority: "high" });
-    await enqueueCommand(deviceId, "room.status.set", { roomId: "B2-104", status: "closed" });
+    await enqueueCommand(deviceId, "announce.show", { announcementId: "a1", text: "Fire drill at 10:00", priority: "urgent" });
+    await enqueueCommand(deviceId, "room.status.set", { ...occupied, status: "closed", label: "Closed" });
 
     const first = connect(deviceId, identity);
     await first.ready;
@@ -273,7 +274,7 @@ describe("live connection", () => {
 
   it("does not resend expired commands", async () => {
     const { identity, deviceId } = await enrolled();
-    const cmd = await enqueueCommand(deviceId, "room.status.set", { roomId: "r", status: "free" });
+    const cmd = await enqueueCommand(deviceId, "room.status.set", { ...occupied, status: "free" });
     await CommandModel.updateOne({ commandId: cmd.commandId }, { expiresAt: new Date(Date.now() - 1000) });
     const dev = connect(deviceId, identity);
     await dev.ready;
@@ -283,11 +284,11 @@ describe("live connection", () => {
 
   it("room status commands update the desired state, which is sent on connection", async () => {
     const { identity, deviceId } = await enrolled();
-    await enqueueCommand(deviceId, "room.status.set", { roomId: "B2-104", status: "reserved" });
+    await enqueueCommand(deviceId, "room.status.set", { ...occupied, status: "reserved", label: "Reserved" });
     const dev = connect(deviceId, identity);
     await dev.ready;
     const ready = await dev.next("session.ready");
-    expect(ready.payload.desired).toMatchObject({ roomStatus: { roomId: "B2-104", status: "reserved" } });
+    expect(ready.payload.desired).toMatchObject({ roomStatus: { ...occupied, status: "reserved", label: "Reserved" } });
     dev.close();
   });
 
@@ -305,7 +306,7 @@ describe("live connection", () => {
 
   it("rejects invalid commands before they reach the outbox", async () => {
     const { deviceId } = await enrolled();
-    await expect(enqueueCommand(deviceId, "room.status.set", { roomId: "r", status: "exploded" })).rejects.toThrow();
+    await expect(enqueueCommand(deviceId, "room.status.set", { ...occupied, status: "Not A Key" })).rejects.toThrow();
     await expect(enqueueCommand(deviceId, "self.destruct", {})).rejects.toThrow(/Unknown command/);
     expect(await CommandModel.countDocuments()).toBe(0);
   });
@@ -402,7 +403,7 @@ describe("hostile input after authentication", () => {
   it("cannot acknowledge another device's command", async () => {
     const a = await enrolled();
     const b = await enrolled();
-    const cmd = await enqueueCommand(a.deviceId, "room.status.set", { roomId: "r", status: "free" });
+    const cmd = await enqueueCommand(a.deviceId, "room.status.set", { ...occupied, status: "free" });
     const devB = connect(b.deviceId, b.identity);
     await devB.ready;
     devB.send("ack", { ref: cmd.commandId });
