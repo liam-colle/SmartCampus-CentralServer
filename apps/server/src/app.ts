@@ -15,6 +15,7 @@ import { devicesRouter, enrollRouter } from "./routes/devices.js";
 import { emergenciesRouter } from "./routes/emergencies.js";
 import { importRouter } from "./routes/import.js";
 import { intercomRouter } from "./routes/intercom.js";
+import { serverKeyRouter } from "./routes/serverKey.js";
 import { roomStatusesRouter } from "./routes/roomStatuses.js";
 import { roomsRouter } from "./routes/rooms.js";
 import { usersRouter } from "./routes/users.js";
@@ -23,7 +24,8 @@ const isBodyParserError = (err: unknown): err is { status: number } =>
   typeof err === "object" && err !== null && "type" in err && typeof (err as { type: unknown }).type === "string" &&
   String((err as { type: string }).type).startsWith("entity.") && typeof (err as { status?: unknown }).status === "number";
 
-export function createApp() {
+/** `serverPublicKey` is what devices pin; when it is not given, the server-key endpoint is not served. */
+export function createApp(options: { serverPublicKey?: string } = {}) {
   const app = express();
 
   if (config.TRUST_PROXY) app.set("trust proxy", 1);
@@ -50,6 +52,7 @@ export function createApp() {
     res.status(dbUp ? 200 : 503).json({ status: dbUp ? "ok" : "degraded", db: dbUp });
   });
   api.use("/auth", authRouter);
+  if (options.serverPublicKey) api.use("/server-key", serverKeyRouter(options.serverPublicKey));
   api.use("/enroll", enrollRouter);
   api.use("/devices", devicesRouter);
   api.use("/buildings", buildingsRouter);

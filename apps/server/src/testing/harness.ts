@@ -29,7 +29,7 @@ export async function startHarness() {
   await seedRoomStatuses();
 
   const serverKey = generateIdentity();
-  const http: Server = createServer(createApp());
+  const http: Server = createServer(createApp({ serverPublicKey: publicKeyOf(serverKey.privateKey) }));
   const gateway = attachGateway(http, { serverPrivateKey: serverKey.privateKey, maxConnectsPerMinute: 1000 });
   await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(http.address() as AddressInfo).port}`;
