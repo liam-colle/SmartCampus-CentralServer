@@ -59,7 +59,7 @@ depend on TLS alone. Protocol: `packages/protocol/README.md`. Design: `docs/Smar
 
 - **Server key**: `SERVER_KEY_FILE` (PKCS#8 PEM). Generated on first start in development
   (`secrets/server-key.pem`, public half in `secrets/server-key.pub`, git-ignored). In production create it with
-  `pnpm --filter @smartcampus/server keys:generate secrets/server-key.pem` and mount it as a secret. Devices are provisioned with the public key.
+  `pnpm --filter @smartcampus/server keys:generate secrets/server-key.pem` and mount it as a secret. Devices are provisioned with the public key: the console shows a QR code (Devices, Provision a device) and the key is also served, public, at `GET /api/server-key` for a terminal that fetches it and has its fingerprint confirmed by the installer.
 - **Enrollment**: a new device posts its public key to `POST /api/enroll` and waits (it polls `GET /api/enroll/:deviceId`). The request
   appears live in the console as a **connection request** (type, name, key fingerprint, source address); an admin or operator approves it
   (optionally naming and placing the device) or denies it. Nothing is typed. Requests expire (`ENROLL_REQUEST_TTL_MINUTES`), at most
