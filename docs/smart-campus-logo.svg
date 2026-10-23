@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Smart Campus</title>
+  <g fill="none" stroke="#00A86B" stroke-width="56" stroke-linecap="butt">
+    <path d="M287.26 78.73 A180 180 0 0 1 425.14 317.56"/>
+    <path d="M393.89 371.70 A180 180 0 0 1 118.11 371.70"/>
+    <path d="M86.86 317.56 A180 180 0 0 1 224.74 78.73"/>
+  </g>
+  <circle cx="256" cy="256" r="64" fill="#00A86B"/>
+</svg>

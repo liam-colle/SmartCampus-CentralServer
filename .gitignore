@@ -8,3 +8,5 @@ secrets/
 __pycache__/
 .venv/
 .vite
+CLAUDE.md
+.claude/settings.local.json
