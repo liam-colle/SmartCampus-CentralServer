@@ -54,4 +54,9 @@ Every type has a zod schema in `src/messages.ts`. The five command types (everyt
 
 ## Enrollment (REST)
 
-`POST /api/enroll {publicKey (SPKI DER b64), type}` returns `{deviceId, code, fingerprint, expiresAt}`. The device shows `code` and `fingerprint`; an admin submits both to `POST /api/devices/enroll`. The private key never leaves the device.
+1. The device generates its key pair (the private key never leaves it) and posts `POST /api/enroll {publicKey (SPKI DER b64), type, name?}`. The reply is `{deviceId, fingerprint, expiresAt}`. Posting the same key again while the request is pending returns the same request.
+2. The device polls `GET /api/enroll/:deviceId` (`pending`, `active`, `denied`, `expired`, `revoked`, `unknown`) and may show the fingerprint so the admin can compare.
+3. In the console an admin or operator sees the request live (`/ws/admin` event `enrollment.requested`) and approves (`POST /api/devices/requests/:id/approve {name?, room?, groups?}`) or denies it (`.../deny`).
+4. Once `active`, the device completes the handshake above with the key it registered.
+
+Safeguards: per-address rate limit, a cap on pending requests, request expiry, a denied key is refused for an hour, an enrolled or revoked key cannot enroll again (generate a new one).

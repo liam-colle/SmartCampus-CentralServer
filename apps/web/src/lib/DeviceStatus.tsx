@@ -1,12 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "./api";
-import type { Device } from "./types";
+import { DEVICE_TYPE_LABEL, type Device, type DeviceType, type EnrollmentRequest } from "./types";
 
-export interface OfflineAlert {
+export interface Notice {
   key: string;
+  kind: "offline" | "request";
   deviceId: string;
+  /** Device name, or what a new device calls itself. */
   name: string;
-  at: number;
 }
 
 interface DeviceStatusState {
@@ -14,9 +15,12 @@ interface DeviceStatusState {
   online: Set<string> | null;
   /** True while the console channel (/ws/admin) is connected. */
   live: boolean;
-  alerts: OfflineAlert[];
+  /** Connection requests waiting for a decision. */
+  requests: EnrollmentRequest[];
+  reloadRequests: () => void;
+  notices: Notice[];
   dismiss: (key: string) => void;
-  /** Bumped on every online/offline event, so pages can refetch. */
+  /** Bumped on every online/offline/enrollment event, so pages can refetch. */
   version: number;
 }
 
@@ -28,14 +32,21 @@ function adminUrl() {
 
 /**
  * Keeps one WebSocket to /ws/admin (same session cookie as the REST API) and exposes which devices
- * are online. Reconnects with backoff. Raises an alert when a device that was online goes offline.
+ * are online and which connection requests are waiting. Reconnects with backoff.
  */
 export function DeviceStatusProvider({ children }: { children: ReactNode }) {
   const [online, setOnline] = useState<Set<string> | null>(null);
   const [live, setLive] = useState(false);
-  const [alerts, setAlerts] = useState<OfflineAlert[]>([]);
+  const [requests, setRequests] = useState<EnrollmentRequest[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
   const [version, setVersion] = useState(0);
   const known = useRef<Set<string> | null>(null);
+
+  const reloadRequests = useCallback(() => {
+    api<{ items: EnrollmentRequest[] }>("/devices/requests")
+      .then((r) => setRequests(r.items))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -43,12 +54,15 @@ export function DeviceStatusProvider({ children }: { children: ReactNode }) {
     let attempt = 0;
     let stopped = false;
 
+    const bump = () => setVersion((v) => v + 1);
+    const notify = (n: Omit<Notice, "key">) =>
+      setNotices((all) => [{ ...n, key: `${n.kind}-${n.deviceId}-${Date.now()}` }, ...all].slice(0, 5));
     const update = (fn: (s: Set<string>) => void) => {
       const next = new Set(known.current ?? []);
       fn(next);
       known.current = next;
       setOnline(next);
-      setVersion((v) => v + 1);
+      bump();
     };
 
     const connect = () => {
@@ -56,9 +70,10 @@ export function DeviceStatusProvider({ children }: { children: ReactNode }) {
       ws.onopen = () => {
         attempt = 0;
         setLive(true);
+        reloadRequests(); // anything that arrived while we were disconnected
       };
       ws.onmessage = (e) => {
-        let msg: { type: string; deviceId?: string; deviceIds?: string[] };
+        let msg: { type: string; deviceId?: string; deviceIds?: string[]; request?: EnrollmentRequest };
         try {
           msg = JSON.parse(e.data);
         } catch {
@@ -67,7 +82,7 @@ export function DeviceStatusProvider({ children }: { children: ReactNode }) {
         if (msg.type === "devices.online") {
           known.current = new Set(msg.deviceIds);
           setOnline(known.current);
-          setVersion((v) => v + 1);
+          bump();
         } else if (msg.type === "device.online" && msg.deviceId) {
           update((s) => s.add(msg.deviceId!));
         } else if (msg.type === "device.offline" && msg.deviceId) {
@@ -75,11 +90,17 @@ export function DeviceStatusProvider({ children }: { children: ReactNode }) {
           update((s) => s.delete(id));
           // Only worth an alert for a device that is still supposed to be in service.
           api<Device>(`/devices/${id}`)
-            .then((d) => {
-              if (d.status !== "active") return;
-              setAlerts((a) => [{ key: `${id}-${Date.now()}`, deviceId: id, name: d.name || id, at: Date.now() }, ...a].slice(0, 5));
-            })
+            .then((d) => d.status === "active" && notify({ kind: "offline", deviceId: id, name: d.name || id }))
             .catch(() => {});
+        } else if (msg.type === "enrollment.requested" && msg.request) {
+          const r = msg.request;
+          setRequests((all) => (all.some((x) => x.id === r.id) ? all : [...all, r]));
+          notify({ kind: "request", deviceId: r.id, name: r.name || DEVICE_TYPE_LABEL[r.type as DeviceType] || r.type });
+        } else if (msg.type === "enrollment.resolved" && msg.deviceId) {
+          const id = msg.deviceId;
+          setRequests((all) => all.filter((x) => x.id !== id));
+          setNotices((all) => all.filter((n) => !(n.kind === "request" && n.deviceId === id)));
+          bump(); // an approved device now belongs in the list
         }
       };
       ws.onclose = () => {
@@ -97,11 +118,19 @@ export function DeviceStatusProvider({ children }: { children: ReactNode }) {
       clearTimeout(timer);
       ws?.close();
     };
-  }, []);
+  }, [reloadRequests]);
 
   const value = useMemo(
-    () => ({ online, live, alerts, version, dismiss: (key: string) => setAlerts((a) => a.filter((x) => x.key !== key)) }),
-    [online, live, alerts, version],
+    () => ({
+      online,
+      live,
+      requests,
+      reloadRequests,
+      notices,
+      version,
+      dismiss: (key: string) => setNotices((all) => all.filter((x) => x.key !== key)),
+    }),
+    [online, live, requests, reloadRequests, notices, version],
   );
   return <DeviceStatusContext.Provider value={value}>{children}</DeviceStatusContext.Provider>;
 }
@@ -110,4 +139,9 @@ export function useDeviceStatus() {
   const ctx = useContext(DeviceStatusContext);
   if (!ctx) throw new Error("useDeviceStatus must be used inside <DeviceStatusProvider>");
   return ctx;
+}
+
+/** For components that also render for users without the live channel (staff). */
+export function useOptionalDeviceStatus() {
+  return useContext(DeviceStatusContext);
 }

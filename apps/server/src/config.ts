@@ -27,8 +27,10 @@ const schema = z.object({
   // Gateway identity key (PKCS#8 PEM, ECDSA P-256). Devices are provisioned with its public half.
   // In development it is generated on first start; in production the file must already exist.
   SERVER_KEY_FILE: z.string().default("secrets/server-key.pem"),
-  // How long a device's enrollment code stays valid.
-  ENROLL_CODE_TTL_MINUTES: z.coerce.number().positive().default(15),
+  // How long a connection request waits for an admin before it expires.
+  ENROLL_REQUEST_TTL_MINUTES: z.coerce.number().positive().default(30),
+  // Cap on requests waiting at the same time, so the public endpoint cannot flood the console.
+  MAX_PENDING_ENROLLMENTS: z.coerce.number().int().positive().default(50),
   // Enrollment requests per address per 15 minutes (the endpoint is public). Raise it for protocol test runs.
   ENROLL_RATE_LIMIT: z.coerce.number().int().positive().default(20),
 

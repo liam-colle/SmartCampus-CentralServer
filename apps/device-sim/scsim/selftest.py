@@ -75,10 +75,10 @@ class Fleet:
 
     async def enroll(self, type_: str = "door", approve: bool = True):
         key = generate_identity()
-        req = await api(self.public.enroll_request, public_key_b64(key), type_)
+        req = await api(self.public.enroll_request, public_key_b64(key), type_, f"selftest {type_}")
         expect(req["fingerprint"] == fingerprint(public_key_b64(key)), "server fingerprint differs from the device's")
         if approve:
-            await api(self.admin.approve, req["code"], req["fingerprint"], f"selftest {type_}")
+            await api(self.admin.approve, req["deviceId"])
         return key, req["deviceId"], req
 
     def device(self, key, device_id: str) -> SimDevice:
@@ -101,28 +101,80 @@ async def run(server: str, server_key_text: str, admin_email: str, admin_passwor
     r = Runner()
     print(f"Protocol conformance run against {server}\n")
 
+    # helper used by several checks below
+    async def refused_handshake(key, did):
+        dev = fleet.device(key, did)
+        try:
+            await dev.do_handshake()
+        except websockets.ConnectionClosed:
+            return dev.ws.close_code
+        raise AssertionError("handshake unexpectedly succeeded")
+
     # ---- 1. happy path -----------------------------------------------------------------------
     print("Enrollment and handshake")
 
     async def enrollment_flow():
         key = generate_identity()
-        req = await api(fleet.public.enroll_request, public_key_b64(key), "door")
-        expect(len(req["code"]) == 8, "enrollment code should be 8 characters")
+        req = await api(fleet.public.enroll_request, public_key_b64(key), "door", "lobby door")
+        expect("code" not in req, "no code is involved any more")
         expect(await api(fleet.public.enrollment_status, req["deviceId"]) == "pending", "should be pending")
+        waiting = {x["id"]: x for x in await api(admin.requests)}
+        expect(req["deviceId"] in waiting, "the console should list the request")
+        shown = waiting[req["deviceId"]]
+        expect(shown["fingerprint"] == req["fingerprint"] == fingerprint(public_key_b64(key)), "console must show the key's fingerprint")
+        expect(shown["name"] == "lobby door" and shown["type"] == "door", "console must show what the device asked for")
+        done = await api(admin.approve, req["deviceId"], "Door B2-104")
+        expect(done["status"] == "active" and done["name"] == "Door B2-104", "approval should activate the device under the chosen name")
+        expect(await api(fleet.public.enrollment_status, req["deviceId"]) == "active", "device should see it is active")
         try:
-            await api(admin.approve, req["code"], "00" * 32, "x")
-            raise AssertionError("approval with a wrong fingerprint must fail")
-        except ApiError as exc:
-            expect(exc.status == 400, f"expected 400, got {exc.status}")
-        await api(admin.approve, req["code"], req["fingerprint"], "selftest door")
-        expect(await api(fleet.public.enrollment_status, req["deviceId"]) == "active", "should be active")
-        try:
-            await api(admin.approve, req["code"], req["fingerprint"], "again")
-            raise AssertionError("an enrollment code must be single use")
+            await api(admin.approve, req["deviceId"])
+            raise AssertionError("a request can only be resolved once")
         except ApiError as exc:
             expect(exc.status == 404, f"expected 404, got {exc.status}")
 
-    await r.check("enrollment: code + fingerprint confirmation, single use", enrollment_flow)
+    await r.check("enrollment: request, appears in the console, approved once", enrollment_flow)
+
+    async def enrollment_denied():
+        key = generate_identity()
+        req = await api(fleet.public.enroll_request, public_key_b64(key), "display")
+        await api(admin.deny, req["deviceId"])
+        expect(await api(fleet.public.enrollment_status, req["deviceId"]) == "denied", "device should see it was denied")
+        expect(req["deviceId"] not in [x["id"] for x in await api(admin.requests)], "denied request must leave the pending list")
+        try:
+            await api(fleet.public.enroll_request, public_key_b64(key), "display")
+            raise AssertionError("a denied key must not be able to ask again at once")
+        except ApiError as exc:
+            expect(exc.status == 403, f"expected 403, got {exc.status}")
+        code = await refused_handshake(key, req["deviceId"])
+        expect(code == P.CLOSE_AUTH_FAILED, f"a denied device must not authenticate, got {code}")
+
+    await r.check("enrollment: denied request never authenticates and cannot be re-asked", enrollment_denied)
+
+    async def enrollment_retry():
+        key = generate_identity()
+        a = await api(fleet.public.enroll_request, public_key_b64(key), "door")
+        b = await api(fleet.public.enroll_request, public_key_b64(key), "door")
+        expect(a["deviceId"] == b["deviceId"], "retrying with the same key must return the same request")
+        pending = [x for x in await api(admin.requests) if x["id"] == a["deviceId"]]
+        expect(len(pending) == 1, "the console must show it once")
+        await api(admin.deny, a["deviceId"])
+        done_key, did, _ = await fleet.enroll()
+        try:
+            await api(fleet.public.enroll_request, public_key_b64(done_key), "door")
+            raise AssertionError("an enrolled key must not enroll again")
+        except ApiError as exc:
+            expect(exc.status == 409, f"expected 409, got {exc.status}")
+
+    await r.check("enrollment: same-key retry is idempotent, enrolled key is refused", enrollment_retry)
+
+    async def enrollment_validation():
+        try:
+            await api(fleet.public.enroll_request, b64(b"not a key" * 12), "door")
+            raise AssertionError("garbage must not be accepted as a public key")
+        except ApiError as exc:
+            expect(exc.status == 400, f"expected 400, got {exc.status}")
+
+    await r.check("enrollment: a malformed public key is refused", enrollment_validation)
 
     async def handshake_ok():
         key, did, _ = await fleet.enroll()
@@ -236,14 +288,6 @@ async def run(server: str, server_key_text: str, admin_email: str, admin_passwor
 
     # ---- 4. hostile behaviour -----------------------------------------------------------------
     print("\nHostile behaviour (all must be refused)")
-
-    async def refused_handshake(key, did):
-        dev = fleet.device(key, did)
-        try:
-            await dev.do_handshake()
-        except websockets.ConnectionClosed:
-            return dev.ws.close_code
-        raise AssertionError("handshake unexpectedly succeeded")
 
     async def pending_device():
         key, did, _ = await fleet.enroll(approve=False)

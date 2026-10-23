@@ -3,6 +3,7 @@ import type { WebSocket } from "ws";
 import { resolveSession } from "../auth/sessions.js";
 import { config } from "../config.js";
 import { toPublicUser, type PublicUser } from "../models/user.js";
+import { consoleBus, type ConsoleEvents } from "./consoleBus.js";
 import { registry } from "./registry.js";
 
 const appOrigin = new URL(config.APP_URL).origin;
@@ -36,13 +37,20 @@ export function handleAdminSocket(ws: WebSocket): void {
   const onOnline = (deviceId: string) => send({ type: "device.online", deviceId });
   const onOffline = (deviceId: string) => send({ type: "device.offline", deviceId });
 
+  const onRequested = (request: ConsoleEvents["enrollment.requested"][0]) => send({ type: "enrollment.requested", request });
+  const onResolved = (event: ConsoleEvents["enrollment.resolved"][0]) => send({ type: "enrollment.resolved", ...event });
+
   send({ type: "devices.online", deviceIds: registry.onlineIds() });
   registry.on("online", onOnline);
   registry.on("offline", onOffline);
+  consoleBus.on("enrollment.requested", onRequested);
+  consoleBus.on("enrollment.resolved", onResolved);
 
   ws.on("error", () => {});
   ws.on("close", () => {
     registry.off("online", onOnline);
     registry.off("offline", onOffline);
+    consoleBus.off("enrollment.requested", onRequested);
+    consoleBus.off("enrollment.resolved", onResolved);
   });
 }

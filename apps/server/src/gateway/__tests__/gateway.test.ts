@@ -6,7 +6,15 @@ import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { enqueueCommand } from "../../domain/commands.js";
-import { approveEnrollment, requestEnrollment, revokeDevice } from "../../domain/devices.js";
+import {
+  approveRequest,
+  denyRequest,
+  enrollmentStatus,
+  listPendingRequests,
+  requestEnrollment,
+  revokeDevice,
+} from "../../domain/devices.js";
+import { consoleBus } from "../consoleBus.js";
 import { CommandModel } from "../../models/command.js";
 import { DeviceModel } from "../../models/device.js";
 import { attachGateway } from "../index.js";
@@ -49,11 +57,11 @@ beforeEach(async () => {
   await CommandModel.deleteMany({});
 });
 
-/** Runs the real two-step enrollment and returns an active device identity. */
+/** Runs the real enrollment (request, then approval from the console) and returns an active device. */
 async function enrolled(type: "door" | "display" | "access" = "door") {
   const identity = generateIdentity();
-  const req = await requestEnrollment({ publicKey: identity.publicKey, type });
-  await approveEnrollment({ code: req.code, fingerprint: req.fingerprint, name: "Test device" });
+  const req = await requestEnrollment({ publicKey: identity.publicKey, type, name: "Test device" });
+  await approveRequest(req.deviceId, {});
   return { identity, deviceId: req.deviceId, req };
 }
 
@@ -61,19 +69,105 @@ const connect = (deviceId: string, identity: Identity, opts = {}) =>
   new TestDevice(url, deviceId, identity.privateKey, serverPublicKey, opts);
 
 describe("enrollment", () => {
-  it("requires the right code and fingerprint, and the code is single use", async () => {
+  it("a request waits for approval, then the device may connect", async () => {
     const identity = generateIdentity();
-    const req = await requestEnrollment({ publicKey: identity.publicKey, type: "door" });
-    await expect(approveEnrollment({ code: "WRONGCODE", fingerprint: req.fingerprint, name: "x" })).rejects.toThrow(/code/);
-    await expect(approveEnrollment({ code: req.code, fingerprint: "00".repeat(32), name: "x" })).rejects.toThrow(/fingerprint/);
-    await approveEnrollment({ code: req.code, fingerprint: req.fingerprint, name: "Door B2-104" });
-    await expect(approveEnrollment({ code: req.code, fingerprint: req.fingerprint, name: "x" })).rejects.toThrow(/code/);
+    const req = await requestEnrollment({ publicKey: identity.publicKey, type: "door", name: "lobby door", ip: "10.0.0.7" });
+    expect(await enrollmentStatus(req.deviceId)).toBe("pending");
+
+    const pending = await listPendingRequests();
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({ deviceId: req.deviceId, name: "lobby door", requestIp: "10.0.0.7", fingerprint: req.fingerprint });
+
+    const device = await approveRequest(req.deviceId, { name: "Door B2-104", groups: ["floor-2"] });
+    expect(device).toMatchObject({ status: "active", name: "Door B2-104", groups: ["floor-2"] });
+    expect(device.enrollExpiresAt).toBeUndefined();
+    expect(await enrollmentStatus(req.deviceId)).toBe("active");
+    expect(await listPendingRequests()).toHaveLength(0);
   });
 
-  it("refuses to enroll the same key twice", async () => {
+  it("keeps the name the device asked for unless the admin gives another", async () => {
     const identity = generateIdentity();
-    await requestEnrollment({ publicKey: identity.publicKey, type: "door" });
+    const req = await requestEnrollment({ publicKey: identity.publicKey, type: "door", name: "lobby door" });
+    expect((await approveRequest(req.deviceId, {})).name).toBe("lobby door");
+  });
+
+  it("a denied request never authenticates and the key cannot ask again at once", async () => {
+    const identity = generateIdentity();
+    const req = await requestEnrollment({ publicKey: identity.publicKey, type: "door" });
+    await denyRequest(req.deviceId);
+    expect(await enrollmentStatus(req.deviceId)).toBe("denied");
+    await expect(requestEnrollment({ publicKey: identity.publicKey, type: "door" })).rejects.toThrow(/denied/);
+    await expect(approveRequest(req.deviceId, {})).rejects.toThrow(/not found or expired/);
+
+    const dev = connect(req.deviceId, identity);
+    expect(await dev.closed).toBe(CloseCode.AuthFailed);
+  });
+
+  it("a request can only be resolved once", async () => {
+    const identity = generateIdentity();
+    const req = await requestEnrollment({ publicKey: identity.publicKey, type: "door" });
+    await approveRequest(req.deviceId, {});
+    await expect(approveRequest(req.deviceId, {})).rejects.toThrow(/not found or expired/);
+    await expect(denyRequest(req.deviceId)).rejects.toThrow(/not found or expired/);
+  });
+
+  it("retrying with the same key while pending returns the same request", async () => {
+    const identity = generateIdentity();
+    const first = await requestEnrollment({ publicKey: identity.publicKey, type: "door" });
+    const again = await requestEnrollment({ publicKey: identity.publicKey, type: "door" });
+    expect(again.deviceId).toBe(first.deviceId);
+    expect(await DeviceModel.countDocuments()).toBe(1);
+  });
+
+  it("expired requests cannot be approved, and the key may ask again", async () => {
+    const identity = generateIdentity();
+    const req = await requestEnrollment({ publicKey: identity.publicKey, type: "door" });
+    await DeviceModel.updateOne({ deviceId: req.deviceId }, { enrollExpiresAt: new Date(Date.now() - 1000) });
+    expect(await enrollmentStatus(req.deviceId)).toBe("expired");
+    expect(await listPendingRequests()).toHaveLength(0);
+    await expect(approveRequest(req.deviceId, {})).rejects.toThrow(/not found or expired/);
+    const renewed = await requestEnrollment({ publicKey: identity.publicKey, type: "door" });
+    expect(renewed.deviceId).not.toBe(req.deviceId);
+  });
+
+  it("refuses a key that is already enrolled", async () => {
+    const { identity } = await enrolled();
     await expect(requestEnrollment({ publicKey: identity.publicKey, type: "door" })).rejects.toThrow(/already enrolled/);
+  });
+
+  it("rejects something that is not a P-256 public key", async () => {
+    await expect(requestEnrollment({ publicKey: "bm90IGEga2V5", type: "door" })).rejects.toThrow(/P-256/);
+  });
+
+  it("caps the number of pending requests", async () => {
+    const { config } = await import("../../config.js");
+    const original = config.MAX_PENDING_ENROLLMENTS;
+    config.MAX_PENDING_ENROLLMENTS = 2;
+    try {
+      await requestEnrollment({ publicKey: generateIdentity().publicKey, type: "door" });
+      await requestEnrollment({ publicKey: generateIdentity().publicKey, type: "door" });
+      await expect(requestEnrollment({ publicKey: generateIdentity().publicKey, type: "door" })).rejects.toThrow(/Too many pending/);
+    } finally {
+      config.MAX_PENDING_ENROLLMENTS = original;
+    }
+  });
+
+  it("tells consoles when a request arrives and when it is resolved", async () => {
+    const seen: string[] = [];
+    const onReq = (r: { id: string; fingerprint: string }) => seen.push(`requested:${r.id}`);
+    const onRes = (e: { deviceId: string; outcome: string }) => seen.push(`${e.outcome}:${e.deviceId}`);
+    consoleBus.on("enrollment.requested", onReq);
+    consoleBus.on("enrollment.resolved", onRes);
+    try {
+      const a = await requestEnrollment({ publicKey: generateIdentity().publicKey, type: "door" });
+      const b = await requestEnrollment({ publicKey: generateIdentity().publicKey, type: "display" });
+      await approveRequest(a.deviceId, {});
+      await denyRequest(b.deviceId);
+      expect(seen).toEqual([`requested:${a.deviceId}`, `requested:${b.deviceId}`, `approved:${a.deviceId}`, `denied:${b.deviceId}`]);
+    } finally {
+      consoleBus.off("enrollment.requested", onReq);
+      consoleBus.off("enrollment.resolved", onRes);
+    }
   });
 });
 

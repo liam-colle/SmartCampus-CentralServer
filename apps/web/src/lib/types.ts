@@ -72,7 +72,7 @@ export interface Device {
   id: string;
   type: DeviceType;
   name: string;
-  status: "active" | "revoked" | "pending";
+  status: "active" | "revoked" | "pending" | "denied";
   fingerprint: string;
   /** Mongo id of the room this device is assigned to. */
   room: string | null;
@@ -83,6 +83,18 @@ export interface Device {
   online: boolean;
   lastSeenAt: string | null;
   createdAt: string;
+}
+
+/** A device asking to be connected, waiting for an admin or operator to approve or deny it. */
+export interface EnrollmentRequest {
+  id: string;
+  type: DeviceType;
+  name: string;
+  fingerprint: string;
+  ip: string | null;
+  userAgent: string | null;
+  requestedAt: string;
+  expiresAt: string | null;
 }
 
 export interface DeviceCommand {
@@ -110,6 +122,12 @@ export function computeDrift(d: Pick<Device, "desired" | "reported">): { key: st
   }
   return drift;
 }
+
+export const timeLeft = (iso: string | null): string => {
+  if (!iso) return "";
+  const m = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
+  return m <= 0 ? "expiring" : m < 60 ? `${m} min left` : `${Math.round(m / 60)} h left`;
+};
 
 export const timeAgo = (iso: string | null): string => {
   if (!iso) return "never";
