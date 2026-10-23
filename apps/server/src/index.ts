@@ -18,7 +18,7 @@ await DeviceModel.syncIndexes();
 await seedAdmin();
 await seedRoomStatuses();
 
-const server = createApp().listen(config.PORT, () => {
+const server = createApp({ serverPublicKey: serverKey.publicKey }).listen(config.PORT, () => {
   console.log(`Server listening on :${config.PORT} (${config.NODE_ENV}), device gateway on /ws/device`);
 });
 const gateway = attachGateway(server, {
