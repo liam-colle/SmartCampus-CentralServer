@@ -4,9 +4,12 @@ import {
   FileUp,
   LayoutDashboard,
   LogOut,
+  Megaphone,
   Menu,
   Radio,
+  Tags,
   Users,
+  Volume2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -57,6 +60,9 @@ function navGroups(manager: boolean): { title: string; items: NavItem[] }[] {
             title: "Control",
             items: [
               { to: "/devices", label: "Devices", icon: Radio },
+              { to: "/announcements", label: "Announcements", icon: Megaphone },
+              { to: "/intercom", label: "InterCom", icon: Volume2 },
+              { to: "/statuses", label: "Room statuses", icon: Tags },
             ],
           },
           {

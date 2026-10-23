@@ -13,6 +13,8 @@ type Init = {
   body?: unknown;
   /** Raw text body, sent as text/csv (used by the CSV import). */
   csv?: string;
+  /** Binary body sent as is (audio uploads). */
+  file?: Blob;
 };
 
 // Called when the server says the session is gone (expired, revoked, account disabled).
@@ -23,15 +25,17 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 
 /** JSON fetch helper. The session cookie is httpOnly, so the browser attaches it by itself. */
 export async function api<T>(path: string, init: Init = {}): Promise<T> {
-  const hasBody = init.body !== undefined || init.csv !== undefined;
+  const hasBody = init.body !== undefined || init.csv !== undefined || init.file !== undefined;
   const res = await fetch(`/api${path}`, {
     method: init.method ?? (hasBody ? "POST" : "GET"),
-    headers: init.csv !== undefined
-      ? { "Content-Type": "text/csv" }
-      : init.body !== undefined
-        ? { "Content-Type": "application/json" }
-        : undefined,
-    body: init.csv ?? (init.body !== undefined ? JSON.stringify(init.body) : undefined),
+    headers: init.file
+      ? { "Content-Type": init.file.type || "application/octet-stream" }
+      : init.csv !== undefined
+        ? { "Content-Type": "text/csv" }
+        : init.body !== undefined
+          ? { "Content-Type": "application/json" }
+          : undefined,
+    body: init.file ?? init.csv ?? (init.body !== undefined ? JSON.stringify(init.body) : undefined),
     credentials: "same-origin",
   });
 
