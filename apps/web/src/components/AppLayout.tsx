@@ -7,6 +7,7 @@ import {
   Megaphone,
   Menu,
   Radio,
+  Siren,
   Tags,
   Users,
   Volume2,
@@ -60,6 +61,7 @@ function navGroups(manager: boolean): { title: string; items: NavItem[] }[] {
             title: "Control",
             items: [
               { to: "/devices", label: "Devices", icon: Radio },
+              { to: "/emergency", label: "Emergency", icon: Siren },
               { to: "/announcements", label: "Announcements", icon: Megaphone },
               { to: "/intercom", label: "InterCom", icon: Volume2 },
               { to: "/statuses", label: "Room statuses", icon: Tags },

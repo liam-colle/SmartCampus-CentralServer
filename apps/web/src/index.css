@@ -75,3 +75,24 @@
     color: var(--primary-foreground);
   }
 }
+
+/* Emergency preview: light travels along the chevrons towards the emblem. */
+@keyframes chevron-travel {
+  0% {
+    opacity: 0.12;
+  }
+  25% {
+    opacity: 1;
+  }
+  70%,
+  100% {
+    opacity: 0.12;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron-travel {
+    animation: none !important;
+    opacity: 0.7;
+  }
+}
