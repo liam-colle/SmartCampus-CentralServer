@@ -45,6 +45,8 @@ services:
       NODE_ENV: development
       MONGO_URI: mongodb://mongo:27017/smartcampus
       APP_URL: http://localhost:5173
+      # Console opened on this machine's LAN address too (and API origin when called directly).
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://127.0.0.1:5173,http://10.13.192.108:5173,http://localhost:3000,http://10.13.192.108:3000}
       SEED_ADMIN_EMAIL: admin@smartcampus.local
       SEED_ADMIN_PASSWORD: changeme123
       AZURE_ENABLED: ${AZURE_ENABLED:-false}

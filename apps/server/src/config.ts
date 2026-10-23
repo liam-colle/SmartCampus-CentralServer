@@ -12,6 +12,13 @@ const schema = z.object({
 
   // Public URL of the app as the browser sees it (used for the Origin check and SSO redirects).
   APP_URL: z.string().url().default("http://localhost:5173"),
+  // Other origins the console may be opened from (comma separated), for example the machine's LAN address.
+  // Each one gets the same trust as APP_URL: it is how the Origin check knows a request comes from the console.
+  ALLOWED_ORIGINS: z
+    .string()
+    .default("")
+    .transform((value) => value.split(",").map((o) => o.trim()).filter(Boolean))
+    .pipe(z.array(z.string().url())),
   // Directory with the built frontend. Only served when NODE_ENV=production.
   STATIC_DIR: z.string().default("public"),
   TRUST_PROXY: bool,
@@ -68,3 +75,7 @@ const env = Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !
 
 export const config = schema.parse(env);
 export const isProd = config.NODE_ENV === "production";
+
+/** Origins the console is served from: APP_URL plus ALLOWED_ORIGINS, compared as `scheme://host:port`. */
+const consoleOrigins = new Set([config.APP_URL, ...config.ALLOWED_ORIGINS].map((url) => new URL(url).origin));
+export const isConsoleOrigin = (origin: string) => consoleOrigins.has(origin);

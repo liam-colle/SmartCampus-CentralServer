@@ -1,12 +1,10 @@
 import type { IncomingMessage } from "node:http";
 import type { WebSocket } from "ws";
 import { resolveSession } from "../auth/sessions.js";
-import { config } from "../config.js";
+import { config, isConsoleOrigin } from "../config.js";
 import { toPublicUser, type PublicUser } from "../models/user.js";
 import { consoleBus, type ConsoleEvents } from "./consoleBus.js";
 import { registry } from "./registry.js";
-
-const appOrigin = new URL(config.APP_URL).origin;
 
 /** Reads one cookie from a raw Cookie header. */
 function cookie(header: string | undefined, name: string): string | undefined {
@@ -23,7 +21,7 @@ function cookie(header: string | undefined, name: string): string | undefined {
  */
 export async function authenticateAdmin(req: IncomingMessage): Promise<PublicUser | null> {
   const origin = req.headers.origin;
-  if (origin && origin !== appOrigin) return null;
+  if (origin && !isConsoleOrigin(origin)) return null;
   const token = cookie(req.headers.cookie, config.SESSION_COOKIE_NAME);
   if (!token) return null;
   const user = await resolveSession(token);
