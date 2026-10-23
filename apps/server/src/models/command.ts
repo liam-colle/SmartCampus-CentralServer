@@ -1,6 +1,7 @@
 import { Schema, model } from "mongoose";
 
-export const COMMAND_STATUSES = ["pending", "sent", "acked", "nacked"] as const;
+/** superseded: a newer command of the same kind replaced it before the device acknowledged it. */
+export const COMMAND_STATUSES = ["pending", "sent", "acked", "nacked", "superseded"] as const;
 
 /**
  * Outbox: every command is stored here before it is sent. It is replayed on reconnection until the

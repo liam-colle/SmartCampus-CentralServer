@@ -7,6 +7,14 @@ import { patchDesired } from "./devices.js";
 
 const DEFAULT_TTL_SECONDS = 3600;
 
+/** Commands that set a lasting state: only the newest one matters, older unacknowledged ones are dropped. */
+const STATE_COMMAND_TYPES: readonly CommandType[] = [
+  "room.status.set",
+  "room.info.set",
+  "display.config.set",
+  "audio.settings.set",
+];
+
 /**
  * Queues a command for a device (outbox) and delivers it right away if the device is online.
  * Offline devices get it on reconnection, as long as it has not expired.
@@ -24,6 +32,11 @@ export async function enqueueCommand(
   const probe = parseServerMessage(JSON.stringify(buildMessage({ type, payload } as never, 1)));
   if (!probe.ok) throw new HttpError(400, probe.error);
 
+  if ((STATE_COMMAND_TYPES as readonly string[]).includes(type)) {
+    // Why: a device that was offline for an hour should not replay forty status flips, only the last.
+    await CommandModel.updateMany({ deviceId, type, status: { $in: ["pending", "sent"] } }, { $set: { status: "superseded" } });
+  }
+
   const command = await CommandModel.create({
     commandId: ulid(),
     deviceId,
@@ -40,7 +53,9 @@ export async function enqueueCommand(
 /** Commands that describe lasting state also update the digital twin target. */
 async function updateDesiredFor(deviceId: string, type: CommandType, payload: Record<string, unknown>) {
   if (type === "room.status.set") await patchDesired(deviceId, { roomStatus: payload });
+  else if (type === "room.info.set") await patchDesired(deviceId, { room: payload });
   else if (type === "display.config.set") await patchDesired(deviceId, { displayConfig: payload.config });
+  else if (type === "audio.settings.set") await patchDesired(deviceId, { audioSettings: payload });
 }
 
 /** Unacknowledged, unexpired commands in creation order: what a (re)connecting device must receive. */

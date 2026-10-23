@@ -4,6 +4,8 @@ import { z } from "zod";
 import { requireRole } from "../auth/middleware.js";
 import { config } from "../config.js";
 import { enqueueCommand, recentCommands } from "../domain/commands.js";
+import { pushRoomToDevice } from "../domain/roomStatus.js";
+import { recordAudit } from "../lib/audit.js";
 import {
   approveRequest,
   denyRequest,
@@ -82,11 +84,14 @@ devicesRouter.post("/requests/:deviceId/approve", async (req, res) => {
     if (!(await RoomModel.exists({ _id: objectId(input.room) }))) throw new HttpError(400, "Unknown room");
   }
   const device = await approveRequest(String(req.params.deviceId), { ...input, room: input.room ?? undefined });
+  if (device.room) await pushRoomToDevice(device.deviceId, String(device.room));
+  await recordAudit(req.user!, "device.approve", { type: "device", id: device.deviceId }, { name: device.name });
   res.json(deviceDto(device, false));
 });
 
 devicesRouter.post("/requests/:deviceId/deny", async (req, res) => {
   await denyRequest(String(req.params.deviceId));
+  await recordAudit(req.user!, "device.deny", { type: "device", id: String(req.params.deviceId) });
   res.status(204).end();
 });
 
@@ -105,6 +110,7 @@ devicesRouter.patch("/:id", async (req, res) => {
     .partial()
     .parse(req.body);
   const device = await loadDevice(req.params.id);
+  const previousRoom = device.room ? String(device.room) : null;
   if (patch.room) {
     if (!(await RoomModel.exists({ _id: objectId(patch.room) }))) throw new HttpError(400, "Unknown room");
   }
@@ -112,11 +118,17 @@ devicesRouter.patch("/:id", async (req, res) => {
   if (patch.groups !== undefined) device.groups = patch.groups;
   if (patch.room !== undefined) device.room = (patch.room ?? undefined) as never;
   await device.save();
+  // Why: a screen moved to another room must show that room at once (the outbox covers offline screens).
+  // Limitation: unlinking a screen from every room does not blank it until a command replaces its state.
+  if (device.status === "active" && device.room && String(device.room) !== previousRoom) {
+    await pushRoomToDevice(device.deviceId, String(device.room));
+  }
   res.json(deviceDto(device, registry.isOnline(device.deviceId)));
 });
 
 devicesRouter.post("/:id/revoke", async (req, res) => {
   const device = await revokeDevice(String(req.params.id));
+  await recordAudit(req.user!, "device.revoke", { type: "device", id: device.deviceId }, { name: device.name });
   res.json(deviceDto(device, false));
 });
 

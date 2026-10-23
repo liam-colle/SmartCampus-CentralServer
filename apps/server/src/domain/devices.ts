@@ -152,6 +152,7 @@ export async function recordReport(
     { deviceId },
     { $set: { reported: state, ...(telemetry && { telemetry }), lastSeenAt: new Date() } },
   );
+  consoleBus.emit("device.reported", { deviceId });
 }
 
 export async function touchLastSeen(deviceId: string): Promise<void> {
