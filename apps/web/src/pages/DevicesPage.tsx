@@ -14,6 +14,7 @@ import { useDeviceStatus } from "@/lib/DeviceStatus";
 import {
   computeDrift,
   DEVICE_TYPE_LABEL,
+  floorLabel,
   formatFingerprint,
   timeAgo,
   timeLeft,
@@ -31,7 +32,12 @@ export function useRoomOptions() {
     const r = items.find((x) => x.id === id);
     return r ? `${r.building.code} ${r.code}` : "";
   };
-  return { items, label, truncated: (rooms.data?.total ?? 0) > items.length };
+  /** "B2 · Floor 1 · B2-104": where a device sits. */
+  const describe = (id: string | null) => {
+    const r = items.find((x) => x.id === id);
+    return r ? `${r.building.name} · ${floorLabel(r.floor)} · ${r.code}` : "";
+  };
+  return { items, label, describe, truncated: (rooms.data?.total ?? 0) > items.length };
 }
 
 export function DevicesPage() {
