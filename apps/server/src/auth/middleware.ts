@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { config } from "../config.js";
+import { config, isConsoleOrigin } from "../config.js";
 import { HttpError } from "../lib/errors.js";
 import { toPublicUser, type PublicUser, type Role } from "../models/user.js";
 import { resolveSession } from "./sessions.js";
@@ -37,7 +37,6 @@ export const requireRole =
   };
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const appOrigin = new URL(config.APP_URL).origin;
 
 /**
  * CSRF defence in depth on top of SameSite=Lax: state-changing requests that carry an
@@ -45,7 +44,7 @@ const appOrigin = new URL(config.APP_URL).origin;
  */
 export function sameOriginGuard(req: Request, _res: Response, next: NextFunction) {
   const origin = req.get("origin");
-  if (!SAFE_METHODS.has(req.method) && origin && origin !== appOrigin) {
+  if (!SAFE_METHODS.has(req.method) && origin && !isConsoleOrigin(origin)) {
     throw new HttpError(403, "Cross-origin request blocked");
   }
   next();
