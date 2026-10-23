@@ -34,7 +34,8 @@ The single `pnpm-lock.yaml` at the root is committed.
 
 | Area | What |
 | --- | --- |
-| Roles | `admin` (everything), `operator` (campus data + staff accounts), `staff` (read-only campus data) |
+| Roles and groups | A person belongs to any of the groups `admin`, `operator`, `student`. The console role follows from them: `admin` (everything), `operator` (campus data, students and plain staff accounts), anyone else read-only. A student can also be an operator or an administrator |
+| Cards | NFC card serial number per person. An admin or operator card opens the maintenance menu on a reader. Students are enrolled with their card, one by one or in bulk through a reader in registration mode (see [Card authentication](#card-authentication)) |
 | Campus | Buildings, rooms, people (staff = user accounts): create, edit, delete. Rooms are searchable and filterable by building, floor and type |
 | Password reset | `POST /api/auth/forgot-password` + `/reset-password`; single-use hashed token by email. Also used for account invitations |
 | Sessions | Idle timeout (`SESSION_IDLE_MINUTES`) and hard limit (`SESSION_TTL_HOURS`), enforced server-side; the UI warns 60 s before signing out |
@@ -78,6 +79,47 @@ depend on TLS alone. Protocol: `packages/protocol/README.md`. Design: `docs/Smar
 - Passwords are hashed with scrypt. Login is rate-limited; state-changing requests are Origin-checked.
 - There is no sign-up. Create users with the seed env vars or
   `docker compose -f docker-compose.dev.yml exec server pnpm user:create <email> <password> [name] [admin|operator|staff]`.
+
+### Card authentication
+
+A person can have an NFC card (`users.cardUid`, the serial number as upper-case hex, unique). A reader (access unit or
+door unit) sends `event.badge` with the serial number it read and the server answers `card.result`:
+
+| Outcome | Meaning |
+| --- | --- |
+| `maintenance` | enabled admin or operator: the reader opens its maintenance menu |
+| `recognised` | known student or staff card, no menu |
+| `unknown`, `disabled`, `rate_limited` | refused; a reader may present 30 cards a minute |
+| `captured`, `duplicate`, `already_registered` | the reader is in registration mode |
+
+Groups are edited on the Staff page (`PATCH /api/users/:id {groups, cardUid}`); an operator can only manage people who are neither
+admin nor operator, so they cannot promote anyone. Group and card changes and every `maintenance.open` are written to `auditLogs`
+(card numbers are not).
+
+**Students and registration mode.** `POST /api/students` creates a student (name and card, no password, no email needed). To
+enrol a class: Students, Register cards, pick a reader. `POST /api/card-registration {deviceId}` puts that reader in registration mode
+(`registration.mode.set`, kept in the digital twin); every card presented is collected, and shown live in the console, until the admin
+stops it (`DELETE /api/card-registration/:id`) or 10 minutes pass. The cards are then named and created with `POST /api/students/bulk`.
+The maintenance menu runs `maintenance.action` messages (`status.set` on the terminal's room, `restart`, `revoke`), accepted only inside a short
+sliding grant opened by the card on that connection and re-checked against the person each time (enabled, operator or admin; revoke is
+admin only). Each is written to `auditLogs` (`room.status.set`, `maintenance.restart`, `maintenance.revoke`).
+While collecting, the reader does not open its maintenance menu, which is why the window is short and ends by itself on the reader too.
+
+**Decision: the server decides, the card is only an identifier.** The reader does not keep a list of who may open the menu, so removing
+someone from a group takes effect at their next tap; the cost is that the menu needs the link to the server. Alternative rejected: pushing
+the privileged cards to the readers (`access.acl.sync`), which also works offline but keeps working for a removed person until the
+reader reconnects.
+
+**Known limitation.** A serial number is not a secret: many cards and phones can be cloned or emulated, so anyone who has read an
+administrator's number can present it. Mitigations in place: only an enrolled, authenticated device can ask (the handshake, not the
+card, proves the reader), a disabled person is refused, taps are rate limited per reader and every opening of the menu is audited.
+The menu itself should not offer anything that cannot be undone from the console. A second factor (PIN on the reader, or a card that
+answers a challenge such as DESFire or a phone credential) is the way to close this properly and is not done.
+
+Existing databases are migrated at start (`migrate.ts`): the stored `role` becomes the matching group and the field is dropped, and the
+unique email index is rebuilt so that people without an email can coexist. Not yet in the repository: the maintenance menu screen itself, which belongs to
+the reader software (`apps/edge-agent` for the access unit, the door app for the Famoco). The simulator prints `MAINTENANCE MENU OPEN`
+(`sim.py run --taps`).
 
 ### Azure SSO (paved, not implemented)
 

@@ -38,11 +38,15 @@ Source of truth is the code; this is the map. Design rationale: `docs/SmartCampu
 | S to D | `announce.clear` | `{announcementId}` |
 | S to D | `audio.play` | `{announcementId, title?, assetId, sha256, size}` (audio is downloaded over signed HTTPS, never carried here) |
 | S to D | `access.acl.sync` | `{rules: [{badgeUid, zones, validFrom?, validUntil?}]}` |
+| S to D | `registration.mode.set` | `{sessionId, active, expiresAt?}`: while active, cards presented to the reader are collected for enrolment instead of being treated as logins. The device leaves the mode by itself at `expiresAt` |
+| S to D | `card.result` | `{ref, outcome, maintenance, name?, menu?{statuses, canRevoke}}`: the answer to an `event.badge` (`ref` is its `id`). The device opens its maintenance menu only when `maintenance` is true. Not a command: never queued, never acknowledged |
+| S to D | `maintenance.result` | `{ref, action, ok, error?}`: the answer to a `maintenance.action`. Not a command |
+| D to S | `maintenance.action` | `{action: status.set\|restart\|revoke, status?}`: chosen in the maintenance menu; accepted only inside the grant opened by the card |
 | D to S | `ack` / `nack` | `{ref}` / `{ref, reason}` where `ref` is the command's envelope `id` |
 | D to S | `state.report` | `{state, telemetry?}` |
-| D to S | `event.badge` | `{badgeUid, at, granted?}` |
+| D to S | `event.badge` | `{badgeUid, at, granted?}`: a card was presented. `badgeUid` is the serial number in any hex notation; the server normalises it and answers with `card.result` |
 
-Every type has a zod schema in `src/messages.ts`. Every server to device type except `session.ready` is a command and must be acknowledged. Time windows (`sleep`, `quietHours`) are local to the device and may cross midnight (`from` later than `to`).
+Every type has a zod schema in `src/messages.ts`. Every server to device type except `session.ready`, `card.result` and `maintenance.result` is a command and must be acknowledged. Time windows (`sleep`, `quietHours`) are local to the device and may cross midnight (`from` later than `to`).
 
 ## Delivery rules
 
