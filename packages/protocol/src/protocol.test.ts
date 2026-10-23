@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_FRAME_BYTES, buildMessage, displayConfig, handshakeMessages, isUlid, parseDeviceMessage, parseServerMessage, ulid } from "./index.js";
+import { EMERGENCY_CATALOGUE, EMERGENCY_KINDS, MAX_FRAME_BYTES, buildMessage, displayConfig, handshakeMessages, isUlid, parseDeviceMessage, parseServerMessage, ulid } from "./index.js";
 
 describe("ulid", () => {
   it("is 26 Crockford chars and sortable by time", () => {
@@ -72,6 +72,26 @@ describe("messages", () => {
       parseServerMessage(JSON.stringify(buildMessage({ type: "announce.show", payload: { announcementId: "a", text: "x", priority } } as never, 1))).ok;
     expect(parse("urgent")).toBe(true);
     expect(parse("high")).toBe(false);
+  });
+
+  it("emergencies need a known kind and a bounded test volume", () => {
+    const base = { emergencyId: "e1", kind: "fire", title: "Fire alarm", instructions: "Leave.", startedAt: 1 };
+    const parse = (over: object) =>
+      parseServerMessage(JSON.stringify(buildMessage({ type: "emergency.set", payload: { ...base, ...over } } as never, 1)));
+    const ok = parse({});
+    expect(ok.ok && ok.message.payload).toMatchObject({ testMode: false, testVolume: 20 });
+    expect(parse({ kind: "zombies" }).ok).toBe(false);
+    expect(parse({ testVolume: 101 }).ok).toBe(false);
+    expect(parse({ instructions: "" }).ok).toBe(false);
+  });
+
+  it("every emergency kind has wording and a colour", () => {
+    for (const kind of EMERGENCY_KINDS) {
+      const info = EMERGENCY_CATALOGUE[kind];
+      expect(info.title.length).toBeGreaterThan(0);
+      expect(info.instructions.length).toBeLessThanOrEqual(400);
+      expect(info.color).toMatch(/^#[0-9a-f]{6}$/);
+    }
   });
 
   it("audio settings bound the volume", () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PROTOCOL_VERSION } from "./constants.js";
+import { EMERGENCY_KINDS } from "./emergency.js";
 import { ULID_REGEX } from "./ulid.js";
 
 /** Envelope shared by every message after the handshake. */
@@ -147,6 +148,27 @@ export const audioPlay = msg(
   }),
 );
 
+/**
+ * An emergency takes over the whole screen and sounds an alarm. It carries its own title and
+ * instructions, so a door unit shows the right thing even when it was installed before the wording
+ * changed, and keeps showing it through an outage until `emergency.clear`.
+ */
+export const emergencySet = msg(
+  "emergency.set",
+  z.object({
+    emergencyId: z.string().min(1).max(64),
+    kind: z.enum(EMERGENCY_KINDS),
+    title: z.string().trim().min(1).max(60),
+    instructions: z.string().trim().min(1).max(400),
+    /** Test mode: the screen says so and the alarm plays at `testVolume`, and respects quiet hours. */
+    testMode: z.boolean().default(false),
+    testVolume: z.number().int().min(0).max(100).default(20),
+    startedAt: z.number().int().nonnegative(),
+  }),
+);
+
+export const emergencyClear = msg("emergency.clear", z.object({ emergencyId: z.string().min(1).max(64) }));
+
 export const accessAclSync = msg(
   "access.acl.sync",
   z.object({
@@ -193,6 +215,8 @@ export const serverMessage = z.discriminatedUnion("type", [
   announceShow,
   announceClear,
   audioPlay,
+  emergencySet,
+  emergencyClear,
   accessAclSync,
 ]);
 
@@ -212,6 +236,8 @@ export const COMMAND_TYPES = [
   "announce.show",
   "announce.clear",
   "audio.play",
+  "emergency.set",
+  "emergency.clear",
   "access.acl.sync",
 ] as const satisfies readonly ServerMessageType[];
 export type CommandType = (typeof COMMAND_TYPES)[number];
