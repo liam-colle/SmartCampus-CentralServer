@@ -53,7 +53,7 @@ export function StaffPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-mono text-2xl">Staff</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Staff</h1>
         <Button onClick={() => setEditing("new")}>
           <Plus /> Add person
         </Button>

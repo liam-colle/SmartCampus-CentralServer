@@ -50,7 +50,7 @@ export function DevicesPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-mono text-2xl">Devices</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Devices</h1>
         <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
           <Radio className={status.live ? "size-4 text-primary" : "size-4"} />
           {status.live ? `Live: ${onlineCount} of ${active} online` : "Live updates unavailable, showing the last known state"}
@@ -58,7 +58,7 @@ export function DevicesPage() {
       </div>
 
       <section aria-labelledby="requests-title" className="flex flex-col gap-3">
-        <h2 id="requests-title" className="flex items-center gap-2 font-mono text-lg">
+        <h2 id="requests-title" className="flex items-center gap-2 text-base font-semibold">
           <PlugZap className="size-5" /> Connection requests
           {status.requests.length > 0 && <Badge>{status.requests.length}</Badge>}
         </h2>

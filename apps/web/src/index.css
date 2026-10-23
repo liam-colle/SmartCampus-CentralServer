@@ -3,10 +3,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Palette: near-black gray surfaces, #00a86b as the foreground/accent. Dark only. */
+/* Palette: near-black gray surfaces, #00a86b as the foreground/accent. Dark only. Layout follows UniFi Site Manager: flat surfaces, hairline borders, a left rail. */
 :root {
   color-scheme: dark;
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 
   --background: #0e0f10;
   --foreground: #00a86b;
@@ -23,9 +23,10 @@
   --accent: #1a2a23;
   --accent-foreground: #00a86b;
   --destructive: #e5484d;
-  --border: #25292b;
+  --border: #212527;
   --input: #2c3033;
   --ring: #00a86b;
+  --sidebar: #0b0c0d;
 }
 
 @theme inline {
@@ -47,11 +48,12 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
@@ -63,17 +65,13 @@
     @apply bg-background text-foreground font-sans antialiased;
     min-height: 100vh;
   }
+  /* Thin, low-contrast scrollbars, like the rest of the chrome. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--input) transparent;
+  }
   ::selection {
     background: var(--primary);
     color: var(--primary-foreground);
   }
-}
-
-/* Faint green grid with a glow, used as the page backdrop. */
-.backdrop-grid {
-  background-image:
-    radial-gradient(60rem 30rem at 50% -10%, rgb(0 168 107 / 0.12), transparent 70%),
-    linear-gradient(rgb(0 168 107 / 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(0 168 107 / 0.04) 1px, transparent 1px);
-  background-size: auto, 40px 40px, 40px 40px;
 }

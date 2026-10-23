@@ -63,7 +63,7 @@ export function RoomsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-mono text-2xl">Rooms</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Rooms</h1>
         {editable && (
           <Button onClick={() => setEditing("new")}>
             <Plus /> Add room
