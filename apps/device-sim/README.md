@@ -39,7 +39,7 @@ python3 apps/device-sim/sim.py enroll --name door-1 --run
 
 ## What `selftest` checks
 
-Run it against a dev server (the dev compose file raises `ENROLL_RATE_LIMIT` for this; the suite
+Run it against a dev server (the dev compose file raises `ENROLL_RATE_LIMIT` and `GATEWAY_CONNECTS_PER_MINUTE` for this; the suite
 enrolls about 25 devices). It takes about 25 seconds, most of it waiting for server timeouts.
 
 - **Enrollment**: the request shows in the console with its fingerprint and requested name, is approved once; a denied request never authenticates and the key cannot ask again; retrying with the same key returns the same request; an enrolled key and a malformed key are refused.

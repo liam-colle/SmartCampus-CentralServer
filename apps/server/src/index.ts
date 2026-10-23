@@ -21,7 +21,10 @@ await seedRoomStatuses();
 const server = createApp().listen(config.PORT, () => {
   console.log(`Server listening on :${config.PORT} (${config.NODE_ENV}), device gateway on /ws/device`);
 });
-const gateway = attachGateway(server, { serverPrivateKey: serverKey.privateKey });
+const gateway = attachGateway(server, {
+  serverPrivateKey: serverKey.privateKey,
+  maxConnectsPerMinute: config.GATEWAY_CONNECTS_PER_MINUTE,
+});
 
 async function shutdown() {
   gateway.close();
