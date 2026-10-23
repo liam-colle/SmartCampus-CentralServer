@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_FRAME_BYTES, buildMessage, handshakeMessages, isUlid, parseDeviceMessage, parseServerMessage, ulid } from "./index.js";
+import { MAX_FRAME_BYTES, buildMessage, displayConfig, handshakeMessages, isUlid, parseDeviceMessage, parseServerMessage, ulid } from "./index.js";
 
 describe("ulid", () => {
   it("is 26 Crockford chars and sortable by time", () => {
@@ -13,9 +13,11 @@ describe("ulid", () => {
   });
 });
 
+const occupied = { roomId: "B2-104", status: "occupied", label: "Occupied", color: "#f5a524", icon: "user" } as const;
+
 describe("messages", () => {
   it("round-trips a server command", () => {
-    const msg = buildMessage({ type: "room.status.set", payload: { roomId: "B2-104", status: "occupied" } }, 1);
+    const msg = buildMessage({ type: "room.status.set", payload: occupied }, 1);
     const parsed = parseServerMessage(JSON.stringify(msg));
     expect(parsed).toEqual({ ok: true, message: msg });
   });
@@ -31,9 +33,9 @@ describe("messages", () => {
   });
 
   it("rejects unknown types, bad payloads, wrong version and bad ids", () => {
-    const ok = buildMessage({ type: "room.status.set", payload: { roomId: "r", status: "free" } }, 1);
+    const ok = buildMessage({ type: "room.status.set", payload: { ...occupied, status: "free" } }, 1);
     expect(parseServerMessage(JSON.stringify({ ...ok, type: "nope" })).ok).toBe(false);
-    expect(parseServerMessage(JSON.stringify({ ...ok, payload: { roomId: "r", status: "exploded" } })).ok).toBe(false);
+    expect(parseServerMessage(JSON.stringify({ ...ok, payload: { ...occupied, status: "Not A Key" } })).ok).toBe(false);
     expect(parseServerMessage(JSON.stringify({ ...ok, v: 2 })).ok).toBe(false);
     expect(parseServerMessage(JSON.stringify({ ...ok, id: "x" })).ok).toBe(false);
     expect(parseServerMessage(JSON.stringify({ ...ok, seq: 0 })).ok).toBe(false);
@@ -42,7 +44,7 @@ describe("messages", () => {
   it("does not accept a message in the wrong direction", () => {
     const ack = buildMessage({ type: "ack", payload: { ref: ulid() } }, 1);
     expect(parseServerMessage(JSON.stringify(ack)).ok).toBe(false);
-    const cmd = buildMessage({ type: "room.status.set", payload: { roomId: "r", status: "free" } }, 1);
+    const cmd = buildMessage({ type: "room.status.set", payload: { ...occupied, status: "free" } }, 1);
     expect(parseDeviceMessage(JSON.stringify(cmd)).ok).toBe(false);
   });
 
@@ -52,8 +54,34 @@ describe("messages", () => {
   });
 
   it("audio.play carries a hash and size, not audio", () => {
-    const bad = buildMessage({ type: "audio.play", payload: { assetId: "a", sha256: "zz", size: 10 } }, 1);
+    const bad = buildMessage({ type: "audio.play", payload: { announcementId: "n", assetId: "a", sha256: "zz", size: 10 } }, 1);
     expect(parseServerMessage(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("a status needs a hex colour and a known icon", () => {
+    const parse = (over: object) =>
+      parseServerMessage(JSON.stringify(buildMessage({ type: "room.status.set", payload: { ...occupied, ...over } }, 1))).ok;
+    expect(parse({})).toBe(true);
+    expect(parse({ color: "red" })).toBe(false);
+    expect(parse({ icon: "skull" })).toBe(false);
+    expect(parse({ label: "" })).toBe(false);
+  });
+
+  it("announcements use info, important and urgent", () => {
+    const parse = (priority: string) =>
+      parseServerMessage(JSON.stringify(buildMessage({ type: "announce.show", payload: { announcementId: "a", text: "x", priority } } as never, 1))).ok;
+    expect(parse("urgent")).toBe(true);
+    expect(parse("high")).toBe(false);
+  });
+
+  it("audio settings bound the volume", () => {
+    const quietHours = { enabled: true, from: "22:00", to: "06:00" };
+    const parse = (volume: number) =>
+      parseServerMessage(JSON.stringify(buildMessage({ type: "audio.settings.set", payload: { volume, quietHours } }, 1))).ok;
+    expect(parse(0)).toBe(true);
+    expect(parse(100)).toBe(true);
+    expect(parse(101)).toBe(false);
+    expect(parse(-1)).toBe(false);
   });
 });
 
@@ -64,5 +92,20 @@ describe("handshake messages", () => {
     expect(handshakeMessages.hello.safeParse(good).success).toBe(true);
     expect(handshakeMessages.hello.safeParse({ ...good, nonceA: b64(16) }).success).toBe(false);
     expect(handshakeMessages.hello.safeParse({ ...good, ephA: b64(33) }).success).toBe(false);
+  });
+});
+
+describe("display config", () => {
+  it("fills every default from an empty object", () => {
+    const config = displayConfig.parse({});
+    expect(config).toMatchObject({ layout: "standard", theme: "dark", accentColor: "#00a86b" });
+    expect(config.show.clock).toBe(true);
+    expect(config.sleep).toEqual({ enabled: false, from: "22:00", to: "06:00" });
+  });
+
+  it("rejects an unknown layout, a bad colour and a bad time", () => {
+    expect(displayConfig.safeParse({ layout: "grid" }).success).toBe(false);
+    expect(displayConfig.safeParse({ accentColor: "green" }).success).toBe(false);
+    expect(displayConfig.safeParse({ sleep: { from: "25:00" } }).success).toBe(false);
   });
 });
