@@ -21,7 +21,7 @@ The central server of **Smart Campus** (EPITECH Marseille, TEK 3). It orchestrat
 - **Orchestration**: commands, room status, announcements, InterCom audio, scheduling.
 - **Persistence**: MongoDB (campus data, device state, files, audit log).
 
-Child devices: *door unit* (Famoco, React Native), *faculty display* (mini-PC/Raspberry Pi + kiosk), *access unit* (Raspberry Pi + NFC reader).
+Child devices: *door unit* (Famoco, native Kotlin and Compose, repository `SmartCampus-DoorUnit`), *faculty display* (mini-PC/Raspberry Pi + kiosk), *access unit* (Raspberry Pi + NFC reader).
 
 The reference design is `docs/SmartCampus-CentralServer_Technical_Deck.pdf` (French). Read it before touching the gateway, protocol or crypto. Summary of the decisions that matter:
 
@@ -54,11 +54,11 @@ Dockerfile, docker-compose.yml (prod), docker-compose.dev.yml (dev)
 docs/                technical deck
 ```
 
-Still to come from the deck: `apps/door`, `apps/edge-agent`. Inside the server, `src/routes/` is the deck's `api/`; new code goes in `src/gateway/` (WSS, handshake session, registry) and `src/domain/` (devices, commands), `src/jobs/`, `src/infra/`. Renaming `routes/` to `api/` is a separate pure `refactor` commit.
+The door unit app lives in its own repository, `SmartCampus-DoorUnit` (Kotlin, a `core` library plus the Android app, same protocol). Still to come from the deck: `apps/edge-agent`. Inside the server, `src/routes/` is the deck's `api/`; new code goes in `src/gateway/` (WSS, handshake session, registry) and `src/domain/` (devices, commands), `src/jobs/`, `src/infra/`. Renaming `routes/` to `api/` is a separate pure `refactor` commit.
 
 Workspace packages are consumed through the `source` export condition in development (`tsx --conditions=source`, no rebuild) and through `dist` in production, so **build packages before typechecking/running tests**: `pnpm typecheck` at the root does it.
 
-Already built: credential-cookie auth (scrypt, hashed opaque sessions in MongoDB, idle + absolute expiry, rate-limited login, Origin check), roles `admin | operator | staff`, password reset/invitations by email, buildings/rooms/people CRUD, room search/filter, CSV import, Azure SSO scaffold (`apps/server/src/auth/providers/azure.ts` throws 501), device protocol/handshake packages, gateway, device enrollment, commands (outbox), device management console (`/devices`, live status over `/ws/admin`).
+Already built: credential-cookie auth (scrypt, hashed opaque sessions in MongoDB, idle + absolute expiry, rate-limited login, Origin check), roles `admin | operator | staff`, password reset/invitations by email, buildings/rooms/people CRUD, room search/filter, CSV import, Azure SSO scaffold (`apps/server/src/auth/providers/azure.ts` throws 501), device protocol/handshake packages, gateway, device enrollment, commands (outbox), device management console (`/devices`, live status over `/ws/admin`), room status catalogue with history, targeted announcements (priority, expiry), GridFS audio assets with signed download, InterCom broadcasts, per-device volume and quiet hours, display configuration with duplication and night sleep, audit entries (`auditLogs`, no viewer yet), live door preview in the console.
 
 ## Commands
 

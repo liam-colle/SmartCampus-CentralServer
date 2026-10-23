@@ -46,6 +46,8 @@ The single `pnpm-lock.yaml` at the root is committed.
 | Audit | `auditLogs` entries for device approval/revocation, status changes, announcements, uploads, broadcasts and configuration changes (the viewer is #27) |
 | CSV import | `/import` page and `POST /api/import/{rooms,users}`; preview (`dryRun`) before writing, per-line errors, upsert |
 
+The door terminal app is in its own repository, [SmartCampus-DoorUnit](https://github.com/liam-colle/SmartCampus-DoorUnit) (Kotlin, Android). Without hardware, `apps/device-sim` plays the same role.
+
 Dev mails are caught by Mailpit at http://localhost:8025.
 
 ## Device gateway
