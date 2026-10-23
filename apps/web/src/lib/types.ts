@@ -242,3 +242,41 @@ export function isInWindow(w: TimeWindow, now: Date = new Date()): boolean {
 }
 
 export const formatBytes = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+
+// ---- Emergency alerts -----------------------------------------------------------------------
+
+/** Mirrors EMERGENCY_KINDS of @smartcampus/protocol. Wording and colours come from GET /emergencies/catalogue. */
+export const EMERGENCY_KINDS = ["fire", "biohazard", "nuclear", "bomb", "seismic", "power"] as const;
+export type EmergencyKind = (typeof EMERGENCY_KINDS)[number];
+
+export interface EmergencyInfo {
+  kind: EmergencyKind;
+  title: string;
+  instructions: string;
+  color: string;
+  loud: boolean;
+}
+
+export interface Emergency {
+  id: string;
+  kind: EmergencyKind;
+  title: string;
+  instructions: string;
+  testMode: boolean;
+  testVolume: number;
+  targets: Targets;
+  deviceCount: number;
+  status: "active" | "cleared";
+  startedBy: string;
+  startedAt: string;
+  clearedBy: string | null;
+  clearedAt: string | null;
+}
+
+export interface EmergencyDelivery {
+  deviceId: string;
+  name: string;
+  delivery: "pending" | "sent" | "acked" | "nacked" | "superseded";
+  /** True when the screen itself reports showing this alert. */
+  showing: boolean;
+}

@@ -12,6 +12,7 @@ import { assetsRouter } from "./routes/assets.js";
 import { authRouter } from "./routes/auth.js";
 import { buildingsRouter } from "./routes/buildings.js";
 import { devicesRouter, enrollRouter } from "./routes/devices.js";
+import { emergenciesRouter } from "./routes/emergencies.js";
 import { importRouter } from "./routes/import.js";
 import { intercomRouter } from "./routes/intercom.js";
 import { roomStatusesRouter } from "./routes/roomStatuses.js";
@@ -54,6 +55,7 @@ export function createApp() {
   api.use("/buildings", buildingsRouter);
   api.use("/announcements", announcementsRouter);
   api.use("/assets", assetsRouter);
+  api.use("/emergencies", emergenciesRouter);
   api.use("/intercom", intercomRouter);
   api.use("/rooms", roomsRouter);
   api.use("/room-statuses", roomStatusesRouter);

@@ -42,6 +42,7 @@ export function handleAdminSocket(ws: WebSocket): void {
 
   const onReported = (event: ConsoleEvents["device.reported"][0]) => send({ type: "device.reported", ...event });
   const onRoomStatus = (event: ConsoleEvents["room.status.changed"][0]) => send({ type: "room.status.changed", ...event });
+  const onEmergency = (event: ConsoleEvents["emergency.changed"][0]) => send({ type: "emergency.changed", ...event });
 
   send({ type: "devices.online", deviceIds: registry.onlineIds() });
   registry.on("online", onOnline);
@@ -50,6 +51,7 @@ export function handleAdminSocket(ws: WebSocket): void {
   consoleBus.on("enrollment.resolved", onResolved);
   consoleBus.on("device.reported", onReported);
   consoleBus.on("room.status.changed", onRoomStatus);
+  consoleBus.on("emergency.changed", onEmergency);
 
   ws.on("error", () => {});
   ws.on("close", () => {
@@ -59,5 +61,6 @@ export function handleAdminSocket(ws: WebSocket): void {
     consoleBus.off("enrollment.resolved", onResolved);
     consoleBus.off("device.reported", onReported);
     consoleBus.off("room.status.changed", onRoomStatus);
+    consoleBus.off("emergency.changed", onEmergency);
   });
 }

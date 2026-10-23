@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import { AppLayout } from "@/components/AppLayout";
+import { EmergencyPage } from "@/pages/EmergencyPage";
 import { AnnouncementsPage } from "@/pages/AnnouncementsPage";
 import { BuildingsPage } from "@/pages/BuildingsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
@@ -33,6 +34,7 @@ export default function App() {
               <Route element={<ProtectedRoute roles={["admin", "operator"]} />}>
                 <Route path="/devices" element={<DevicesPage />} />
                 <Route path="/devices/:id" element={<DeviceDetailPage />} />
+                <Route path="/emergency" element={<EmergencyPage />} />
                 <Route path="/announcements" element={<AnnouncementsPage />} />
                 <Route path="/intercom" element={<IntercomPage />} />
                 <Route path="/statuses" element={<StatusesPage />} />

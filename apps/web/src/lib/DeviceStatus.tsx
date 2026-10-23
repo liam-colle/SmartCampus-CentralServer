@@ -92,7 +92,7 @@ export function DeviceStatusProvider({ children }: { children: ReactNode }) {
           api<Device>(`/devices/${id}`)
             .then((d) => d.status === "active" && notify({ kind: "offline", deviceId: id, name: d.name || id }))
             .catch(() => {});
-        } else if (msg.type === "device.reported" || msg.type === "room.status.changed") {
+        } else if (msg.type === "device.reported" || msg.type === "room.status.changed" || msg.type === "emergency.changed") {
           bump(); // open previews and room lists refetch
         } else if (msg.type === "enrollment.requested" && msg.request) {
           const r = msg.request;

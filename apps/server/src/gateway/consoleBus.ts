@@ -16,6 +16,7 @@ export interface ConsoleEvents {
   "enrollment.resolved": [event: { deviceId: string; outcome: "approved" | "denied" }];
   "device.reported": [event: { deviceId: string }];
   "room.status.changed": [event: { roomId: string; status: string }];
+  "emergency.changed": [event: { emergencyId: string }];
 }
 
 /** Things that happen on the server and that open consoles should hear about at once. */

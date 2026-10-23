@@ -15,6 +15,9 @@ const STATE_COMMAND_TYPES: readonly CommandType[] = [
   "audio.settings.set",
 ];
 
+/** An emergency start and its end replace one another: only the newest of the two is still true. */
+const EMERGENCY_COMMAND_TYPES: readonly CommandType[] = ["emergency.set", "emergency.clear"];
+
 /**
  * Queues a command for a device (outbox) and delivers it right away if the device is online.
  * Offline devices get it on reconnection, as long as it has not expired.
@@ -32,9 +35,14 @@ export async function enqueueCommand(
   const probe = parseServerMessage(JSON.stringify(buildMessage({ type, payload } as never, 1)));
   if (!probe.ok) throw new HttpError(400, probe.error);
 
-  if ((STATE_COMMAND_TYPES as readonly string[]).includes(type)) {
+  const replaced = (EMERGENCY_COMMAND_TYPES as readonly string[]).includes(type)
+    ? EMERGENCY_COMMAND_TYPES
+    : (STATE_COMMAND_TYPES as readonly string[]).includes(type)
+      ? [type]
+      : [];
+  if (replaced.length) {
     // Why: a device that was offline for an hour should not replay forty status flips, only the last.
-    await CommandModel.updateMany({ deviceId, type, status: { $in: ["pending", "sent"] } }, { $set: { status: "superseded" } });
+    await CommandModel.updateMany({ deviceId, type: { $in: replaced }, status: { $in: ["pending", "sent"] } }, { $set: { status: "superseded" } });
   }
 
   const command = await CommandModel.create({
@@ -56,6 +64,8 @@ async function updateDesiredFor(deviceId: string, type: CommandType, payload: Re
   else if (type === "room.info.set") await patchDesired(deviceId, { room: payload });
   else if (type === "display.config.set") await patchDesired(deviceId, { displayConfig: payload.config });
   else if (type === "audio.settings.set") await patchDesired(deviceId, { audioSettings: payload });
+  else if (type === "emergency.set") await patchDesired(deviceId, { emergency: payload });
+  else if (type === "emergency.clear") await patchDesired(deviceId, { emergency: null });
 }
 
 /** Unacknowledged, unexpired commands in creation order: what a (re)connecting device must receive. */

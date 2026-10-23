@@ -123,6 +123,12 @@ class DeviceBehaviour:
             self.state["displayConfig"] = desired["displayConfig"]
         for announcement_id, a in desired.get("announcements", {}).items():
             self.announcements[announcement_id] = a.get("expiresAt")
+        # The desired state is complete: no emergency in it means the alert is over, even if the clear was missed.
+        emergency = desired.get("emergency")
+        if emergency:
+            self.state["emergency"] = emergency["emergencyId"]
+        else:
+            self.state.pop("emergency", None)
 
     def execute(self, msg: dict) -> None:
         t, p = msg["type"], msg["payload"]
@@ -146,6 +152,14 @@ class DeviceBehaviour:
             log(f"  ANNOUNCEMENT [{p.get('priority', 'info')}] {p.get('title') or ''} {p['text']}")
         elif t == "audio.play":
             log(f"  would download asset {p['assetId']} ({p['size']} bytes) and verify sha256 {p['sha256'][:12]}...")
+        elif t == "emergency.set":
+            self.state["emergency"] = p["emergencyId"]
+            log(f"  EMERGENCY {p['title']} ({p['kind']}){' [test, volume ' + str(p['testVolume']) + ']' if p['testMode'] else ''}: {p['instructions']}")
+        elif t == "emergency.clear":
+            # A clear for an alert that was replaced by a newer one must not end the newer one.
+            if self.state.get("emergency") == p["emergencyId"]:
+                self.state.pop("emergency", None)
+            log(f"  emergency {p['emergencyId']} cleared")
         elif t == "access.acl.sync":
             log(f"  access list synced: {len(p['rules'])} badge rule(s)")
 

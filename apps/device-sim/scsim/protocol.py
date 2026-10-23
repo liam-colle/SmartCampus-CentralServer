@@ -29,6 +29,8 @@ COMMAND_TYPES = {
     "announce.show",
     "announce.clear",
     "audio.play",
+    "emergency.set",
+    "emergency.clear",
     "access.acl.sync",
 }
 
