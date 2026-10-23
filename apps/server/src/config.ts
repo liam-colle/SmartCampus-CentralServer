@@ -33,6 +33,8 @@ const schema = z.object({
   MAX_PENDING_ENROLLMENTS: z.coerce.number().int().positive().default(50),
   // Largest audio upload (megabytes). Audio is stored in GridFS and downloaded by devices over signed HTTPS.
   MAX_AUDIO_MB: z.coerce.number().positive().max(100).default(10),
+  // New device connections per address per minute (handshake rate limit). Raise it for protocol test runs.
+  GATEWAY_CONNECTS_PER_MINUTE: z.coerce.number().int().positive().default(30),
   // Enrollment requests per address per 15 minutes (the endpoint is public). Raise it for protocol test runs.
   ENROLL_RATE_LIMIT: z.coerce.number().int().positive().default(20),
 

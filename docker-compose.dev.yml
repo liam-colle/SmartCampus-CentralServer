@@ -55,6 +55,7 @@ services:
       SERVER_KEY_FILE: /app/secrets/server-key.pem
       # The protocol test tool enrolls many devices in a row.
       ENROLL_RATE_LIMIT: "1000"
+      GATEWAY_CONNECTS_PER_MINUTE: "1000"
     depends_on:
       install:
         condition: service_completed_successfully

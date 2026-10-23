@@ -108,12 +108,21 @@ class DeviceBehaviour:
         self.ident = ident
         self.ack = ack
         self.state: dict = {}
+        # announcementId -> expiresAt in ms (None: until cleared). The door app also hides them by itself at expiry.
+        self.announcements: dict[str, int | None] = {}
+
+    def report_state(self) -> dict:
+        now_ms = int(time.time() * 1000)
+        self.announcements = {a: e for a, e in self.announcements.items() if e is None or e > now_ms}
+        return {**self.state, "announcements": sorted(self.announcements)}
 
     def apply_desired(self, desired: dict) -> None:
         if "roomStatus" in desired:
             self.state["roomStatus"] = desired["roomStatus"].get("status")
         if "displayConfig" in desired:
             self.state["displayConfig"] = desired["displayConfig"]
+        for announcement_id, a in desired.get("announcements", {}).items():
+            self.announcements[announcement_id] = a.get("expiresAt")
 
     def execute(self, msg: dict) -> None:
         t, p = msg["type"], msg["payload"]
@@ -127,11 +136,13 @@ class DeviceBehaviour:
             self.state["volume"] = p["volume"]
             log(f"  volume {p['volume']}, quiet hours {p['quietHours']}")
         elif t == "announce.clear":
+            self.announcements.pop(p["announcementId"], None)
             log(f"  announcement {p['announcementId']} cleared")
         elif t == "display.config.set":
             self.state["displayConfig"] = p["config"]
             log(f"  display config updated: {p['config']}")
         elif t == "announce.show":
+            self.announcements[p["announcementId"]] = p.get("expiresAt")
             log(f"  ANNOUNCEMENT [{p.get('priority', 'info')}] {p.get('title') or ''} {p['text']}")
         elif t == "audio.play":
             log(f"  would download asset {p['assetId']} ({p['size']} bytes) and verify sha256 {p['sha256'][:12]}...")
@@ -142,7 +153,7 @@ class DeviceBehaviour:
         p = ready["payload"]
         log(f"session ready: {p['pendingCommands']} pending command(s), desired={json.dumps(p['desired'])}")
         self.apply_desired(p["desired"])
-        await dev.send_message("state.report", {"state": self.state, "telemetry": {"uptime": int(time.monotonic())}})
+        await dev.send_message("state.report", {"state": self.report_state(), "telemetry": {"uptime": int(time.monotonic())}})
 
         while True:
             msg = await dev.recv_message(timeout=3600)
@@ -156,7 +167,7 @@ class DeviceBehaviour:
                 self.execute(msg)
                 self.ident.seen_ids.append(msg["id"])
                 self.ident.save()
-                await dev.send_message("state.report", {"state": self.state})
+                await dev.send_message("state.report", {"state": self.report_state()})
             if self.ack:
                 await dev.send_message("ack", {"ref": msg["id"]})
                 log(f"-> ack {msg['id']}")
