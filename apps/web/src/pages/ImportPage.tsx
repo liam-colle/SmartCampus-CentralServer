@@ -63,11 +63,11 @@ export function ImportPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-mono text-2xl">CSV import</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">CSV import</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-mono">1. Choose a file</CardTitle>
+          <CardTitle>1. Choose a file</CardTitle>
           <CardDescription>
             Existing entries are updated, new ones created. Comma, semicolon or tab separated. Nothing is saved until you confirm.
           </CardDescription>
@@ -117,7 +117,7 @@ export function ImportPage() {
       {result && (
         <Card>
           <CardHeader>
-            <CardTitle className="font-mono">{result.dryRun ? "2. Preview" : "Done"}</CardTitle>
+            <CardTitle>{result.dryRun ? "2. Preview" : "Done"}</CardTitle>
             <CardDescription>
               {result.total} row{result.total === 1 ? "" : "s"} read: {result.created} to create, {result.updated} to update, {result.errors.length} with errors
               {result.dryRun ? "." : " (created / updated shown are what was written)."}

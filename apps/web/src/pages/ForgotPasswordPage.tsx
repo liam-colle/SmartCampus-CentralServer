@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { ErrorText, Field } from "@/components/Field";
+import { Wordmark } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,10 +28,11 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <main className="backdrop-grid grid min-h-screen place-items-center px-4">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-8 px-4">
+      <Wordmark className="[&_img]:size-9 [&>span:last-child]:text-xl" />
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="font-mono text-lg">Reset password</CardTitle>
+          <CardTitle className="text-lg">Reset password</CardTitle>
           <CardDescription>We will email you a link to choose a new password.</CardDescription>
         </CardHeader>
         <CardContent>

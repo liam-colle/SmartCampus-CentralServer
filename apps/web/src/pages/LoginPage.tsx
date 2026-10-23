@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
+import { Wordmark } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,12 +34,12 @@ export function LoginPage() {
   }
 
   return (
-    <main className="backdrop-grid grid min-h-screen place-items-center px-4">
+    <main className="grid min-h-screen place-items-center px-4">
       <div className="w-full max-w-sm">
-        <p className="mb-6 text-center font-mono text-sm tracking-[0.35em] uppercase">SmartCampus</p>
+        <Wordmark className="mb-8 justify-center [&_img]:size-9 [&>span:last-child]:text-xl" />
         <Card>
           <CardHeader>
-            <CardTitle className="font-mono text-lg">Sign in</CardTitle>
+            <CardTitle className="text-lg">Sign in</CardTitle>
             <CardDescription>Use your campus account credentials.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">

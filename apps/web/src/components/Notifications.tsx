@@ -17,7 +17,7 @@ export function Notifications() {
           <div
             key={n.key}
             className={cn(
-              "flex items-start gap-3 rounded-lg border bg-card p-3 text-sm shadow-xl shadow-black/50",
+              "flex items-start gap-3 rounded-xl border bg-card p-3 text-sm shadow-lg shadow-black/40",
               request ? "border-primary/50" : "border-destructive/50",
             )}
           >

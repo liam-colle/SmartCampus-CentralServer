@@ -81,7 +81,7 @@ export function DeviceDetailPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex flex-wrap items-center gap-3 font-mono text-2xl">
+          <h1 className="flex flex-wrap items-center gap-3 text-2xl font-semibold tracking-tight">
             {d.name || d.id} <ConnectionBadge status={d.status} online={online} />
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -105,7 +105,7 @@ export function DeviceDetailPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="font-mono">Identity</CardTitle>
+            <CardTitle>Identity</CardTitle>
             <CardDescription>The public key registered at enrollment.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -124,7 +124,7 @@ export function DeviceDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-3 font-mono">
+            <CardTitle className="flex items-center gap-3">
               State {!revoked && (drift.length === 0 ? <Badge variant="muted">In sync</Badge> : <Badge variant="destructive">{drift.length} not applied</Badge>)}
             </CardTitle>
             <CardDescription>What the console asked for, and what the device last reported.</CardDescription>
@@ -147,7 +147,7 @@ export function DeviceDetailPage() {
       {!revoked && <CommandForm device={d} online={online} rooms={rooms.items} onSent={reloadCommands} />}
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-mono text-lg">Command history</h2>
+        <h2 className="text-base font-semibold">Command history</h2>
         <Table>
           <TableHeader>
             <TableRow>
@@ -279,7 +279,7 @@ function CommandForm({ device, online, rooms, onSent }: { device: Device; online
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-mono">Send a command</CardTitle>
+        <CardTitle>Send a command</CardTitle>
         <CardDescription>
           {online ? "The device is online and receives it now." : "The device is offline: commands wait and are delivered, in order, when it reconnects."}
         </CardDescription>
