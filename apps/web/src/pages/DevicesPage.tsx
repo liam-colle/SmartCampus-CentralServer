@@ -1,8 +1,9 @@
-import { Check, PlugZap, Radio, X } from "lucide-react";
+import { Check, PlugZap, Plus, Radio, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ConnectionBadge } from "@/components/DeviceBadges";
 import { ErrorText } from "@/components/Field";
+import { ProvisionDialog } from "@/components/ProvisionDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +45,7 @@ export function DevicesPage() {
   const status = useDeviceStatus();
   const devices = useFetch<{ items: Device[] }>("/devices");
   const rooms = useRoomOptions();
+  const [provisioning, setProvisioning] = useState(false);
 
   // Refetch when a device connects or disconnects, or a request is resolved, so the list stays fresh.
   useOnChange(status.version, devices.reload);
@@ -55,13 +57,19 @@ export function DevicesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Devices</h1>
-        <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-          <Radio className={status.live ? "size-4 text-primary" : "size-4"} />
-          {status.live ? `Live: ${onlineCount} of ${active} online` : "Live updates unavailable, showing the last known state"}
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Devices</h1>
+          <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+            <Radio className={status.live ? "size-4 text-primary" : "size-4"} />
+            {status.live ? `Live: ${onlineCount} of ${active} online` : "Live updates unavailable, showing the last known state"}
+          </p>
+        </div>
+        <Button onClick={() => setProvisioning(true)}>
+          <Plus /> Provision a device
+        </Button>
       </div>
+      {provisioning && <ProvisionDialog onClose={() => setProvisioning(false)} />}
 
       <section aria-labelledby="requests-title" className="flex flex-col gap-3">
         <h2 id="requests-title" className="flex items-center gap-2 text-base font-semibold">
