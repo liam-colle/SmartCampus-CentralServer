@@ -17,6 +17,8 @@ export interface ConsoleEvents {
   "device.reported": [event: { deviceId: string }];
   "room.status.changed": [event: { roomId: string; status: string }];
   "emergency.changed": [event: { emergencyId: string }];
+  /** A card was collected while a reader was in registration mode. */
+  "registration.card": [event: { sessionId: string; deviceId: string; cardUid: string; outcome: string; ownerName?: string }];
 }
 
 /** Things that happen on the server and that open consoles should hear about at once. */

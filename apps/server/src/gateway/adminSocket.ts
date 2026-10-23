@@ -25,8 +25,9 @@ export async function authenticateAdmin(req: IncomingMessage): Promise<PublicUse
   const token = cookie(req.headers.cookie, config.SESSION_COOKIE_NAME);
   if (!token) return null;
   const user = await resolveSession(token);
-  if (!user || user.role === "staff") return null;
-  return toPublicUser(user);
+  if (!user) return null;
+  const publicUser = toPublicUser(user);
+  return publicUser.role === "staff" ? null : publicUser;
 }
 
 /** Pushes device online/offline changes to a console. Read-only: inbound frames are ignored. */
@@ -42,6 +43,8 @@ export function handleAdminSocket(ws: WebSocket): void {
   const onRoomStatus = (event: ConsoleEvents["room.status.changed"][0]) => send({ type: "room.status.changed", ...event });
   const onEmergency = (event: ConsoleEvents["emergency.changed"][0]) => send({ type: "emergency.changed", ...event });
 
+  const onRegistrationCard = (event: ConsoleEvents["registration.card"][0]) => send({ type: "registration.card", ...event });
+
   send({ type: "devices.online", deviceIds: registry.onlineIds() });
   registry.on("online", onOnline);
   registry.on("offline", onOffline);
@@ -50,6 +53,7 @@ export function handleAdminSocket(ws: WebSocket): void {
   consoleBus.on("device.reported", onReported);
   consoleBus.on("room.status.changed", onRoomStatus);
   consoleBus.on("emergency.changed", onEmergency);
+  consoleBus.on("registration.card", onRegistrationCard);
 
   ws.on("error", () => {});
   ws.on("close", () => {
@@ -60,5 +64,6 @@ export function handleAdminSocket(ws: WebSocket): void {
     consoleBus.off("device.reported", onReported);
     consoleBus.off("room.status.changed", onRoomStatus);
     consoleBus.off("emergency.changed", onEmergency);
+    consoleBus.off("registration.card", onRegistrationCard);
   });
 }

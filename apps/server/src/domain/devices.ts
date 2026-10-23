@@ -132,7 +132,7 @@ export async function activePublicKey(deviceId: string): Promise<string | null> 
   return d?.publicKey ?? null;
 }
 
-/** The full desired state sent on connection. Announcements that already expired are left out. */
+/** The full desired state sent on connection. Announcements and registration windows that already expired are left out. */
 export async function desiredState(deviceId: string): Promise<Record<string, unknown>> {
   const d = await DeviceModel.findOne({ deviceId }, { desired: 1 });
   const desired = { ...((d?.desired as Record<string, unknown> | undefined) ?? {}) };
@@ -143,6 +143,9 @@ export async function desiredState(deviceId: string): Promise<Record<string, unk
       Object.entries(announcements).filter(([, a]) => a.expiresAt === undefined || a.expiresAt > now),
     );
   }
+  // A reader that was offline when its registration window closed must not wake up in that mode.
+  const registration = desired.registration as { expiresAt?: number } | null | undefined;
+  if (registration?.expiresAt !== undefined && registration.expiresAt <= Date.now()) desired.registration = null;
   return desired;
 }
 

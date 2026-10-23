@@ -63,7 +63,7 @@ export async function startHarness() {
   async function signIn(role: Role): Promise<ApiClient> {
     const email = `${role}@test.local`;
     const existing = await UserModel.findOne({ email });
-    if (!existing) await UserModel.create({ email, name: `Test ${role}`, role, passwordHash: await hashPassword(PASSWORD) });
+    if (!existing) await UserModel.create({ email, name: `Test ${role}`, groups: role === "staff" ? [] : [role], passwordHash: await hashPassword(PASSWORD) });
     const res = await fetch(`${origin}/api/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },

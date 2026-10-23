@@ -10,6 +10,7 @@ import { HttpError } from "./lib/errors.js";
 import { announcementsRouter } from "./routes/announcements.js";
 import { assetsRouter } from "./routes/assets.js";
 import { authRouter } from "./routes/auth.js";
+import { cardRegistrationRouter } from "./routes/cardRegistration.js";
 import { buildingsRouter } from "./routes/buildings.js";
 import { devicesRouter, enrollRouter } from "./routes/devices.js";
 import { emergenciesRouter } from "./routes/emergencies.js";
@@ -18,6 +19,7 @@ import { intercomRouter } from "./routes/intercom.js";
 import { serverKeyRouter } from "./routes/serverKey.js";
 import { roomStatusesRouter } from "./routes/roomStatuses.js";
 import { roomsRouter } from "./routes/rooms.js";
+import { studentsRouter } from "./routes/students.js";
 import { usersRouter } from "./routes/users.js";
 
 const isBodyParserError = (err: unknown): err is { status: number } =>
@@ -63,6 +65,8 @@ export function createApp(options: { serverPublicKey?: string } = {}) {
   api.use("/rooms", roomsRouter);
   api.use("/room-statuses", roomStatusesRouter);
   api.use("/users", usersRouter);
+  api.use("/students", studentsRouter);
+  api.use("/card-registration", cardRegistrationRouter);
   api.use("/import", importRouter);
   api.use((_req, _res, next) => next(new HttpError(404, "Not found")));
 

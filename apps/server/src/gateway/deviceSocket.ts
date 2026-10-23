@@ -9,6 +9,8 @@ import {
   type DeviceMessage,
 } from "@smartcampus/protocol";
 import type { RawData, WebSocket } from "ws";
+import { decideCard } from "../domain/badges.js";
+import { closeGrant, runMaintenanceAction } from "../domain/maintenance.js";
 import { markAcked, markNacked, pendingCommands } from "../domain/commands.js";
 import { activePublicKey, desiredState, recordReport, touchLastSeen } from "../domain/devices.js";
 import { DeviceConnection } from "./deviceConnection.js";
@@ -134,11 +136,29 @@ export function handleDeviceSocket(ws: WebSocket, ip: string, opts: DeviceSocket
       case "state.report":
         await recordReport(connection.deviceId, msg.payload.state, msg.payload.telemetry);
         break;
+      case "maintenance.action":
+        await answerAction(connection, msg);
+        break;
       case "event.badge":
-        // Access decisions arrive with the access unit (M4); for now the event is only logged.
-        log("info", "badge event", { deviceId: connection.deviceId, at: msg.payload.at, granted: msg.payload.granted });
+        // Door access rules arrive with M4. For now a card either opens the maintenance menu
+        // (admin/operator), is collected for enrolment (registration mode) or is just recognised.
+        await answerBadge(connection, msg);
         break;
     }
+  }
+
+  async function answerAction(connection: DeviceConnection, msg: Extract<DeviceMessage, { type: "maintenance.action" }>) {
+    const { action, status } = msg.payload;
+    const result = await runMaintenanceAction(connection.deviceId, action, status);
+    log("info", "maintenance action", { deviceId: connection.deviceId, action, ok: result.ok });
+    if (connection.open) connection.send("maintenance.result", { ref: msg.id, action, ...result });
+  }
+
+  async function answerBadge(connection: DeviceConnection, msg: Extract<DeviceMessage, { type: "event.badge" }>) {
+    const decision = await decideCard(connection.deviceId, msg.payload.badgeUid);
+    log("info", "badge event", { deviceId: connection.deviceId, outcome: decision.outcome });
+    // Not queued on purpose: an answer that arrives after a reconnect is stale (see `card.result`).
+    if (connection.open) connection.send("card.result", { ref: msg.id, ...decision });
   }
 
   let queue: Promise<void> = Promise.resolve();
@@ -156,6 +176,7 @@ export function handleDeviceSocket(ws: WebSocket, ip: string, opts: DeviceSocket
     clearTimeout(handshakeTimer);
     clearInterval(pingTimer);
     if (conn) {
+      closeGrant(conn.deviceId);
       registry.unregister(conn);
       void touchLastSeen(conn.deviceId).catch(() => {});
     }
