@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/middleware.js";
+import { pushRoomToItsDevices, roomStatusHistory, setRoomStatus } from "../domain/roomStatus.js";
 import { HttpError } from "../lib/errors.js";
 import { escapeRegex, objectId, optionalText, pagination } from "../lib/http.js";
 import { BuildingModel } from "../models/building.js";
@@ -90,7 +91,29 @@ roomsRouter.patch("/:id", canWrite, async (req, res) => {
   }
   const room = await RoomModel.findByIdAndUpdate(id, patch, { new: true, runValidators: true });
   if (!room) throw new HttpError(404, "Room not found");
+  await pushRoomToItsDevices(id); // the door screens show the code, name, building and floor
   res.json(await loadRoom(id));
+});
+
+roomsRouter.put("/:id/status", canWrite, async (req, res) => {
+  const { status } = z.object({ status: z.string().min(1).max(32) }).parse(req.body);
+  await setRoomStatus(objectId(req.params.id), status, req.user!);
+  res.json(await loadRoom(objectId(req.params.id)));
+});
+
+roomsRouter.get("/:id/status-history", async (req, res) => {
+  const items = await roomStatusHistory(objectId(req.params.id));
+  res.json({
+    items: items.map((c) => ({
+      id: String(c._id),
+      from: c.from,
+      to: c.to,
+      label: c.toLabel,
+      color: c.toColor,
+      by: c.actorName,
+      at: c.at,
+    })),
+  });
 });
 
 roomsRouter.delete("/:id", canWrite, async (req, res) => {

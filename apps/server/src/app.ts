@@ -11,6 +11,7 @@ import { authRouter } from "./routes/auth.js";
 import { buildingsRouter } from "./routes/buildings.js";
 import { devicesRouter, enrollRouter } from "./routes/devices.js";
 import { importRouter } from "./routes/import.js";
+import { roomStatusesRouter } from "./routes/roomStatuses.js";
 import { roomsRouter } from "./routes/rooms.js";
 import { usersRouter } from "./routes/users.js";
 
@@ -45,6 +46,7 @@ export function createApp() {
   api.use("/devices", devicesRouter);
   api.use("/buildings", buildingsRouter);
   api.use("/rooms", roomsRouter);
+  api.use("/room-statuses", roomStatusesRouter);
   api.use("/users", usersRouter);
   api.use("/import", importRouter);
   api.use((_req, _res, next) => next(new HttpError(404, "Not found")));

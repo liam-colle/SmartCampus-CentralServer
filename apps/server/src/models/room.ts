@@ -13,6 +13,9 @@ const roomSchema = new Schema(
     floor: { type: Number, required: true, min: -10, max: 200 },
     capacity: { type: Number, min: 0 },
     type: { type: String, enum: ROOM_TYPES, default: "other", required: true },
+    // Key of a RoomStatus. Not a reference: custom statuses can be removed only when unused.
+    status: { type: String, default: "free", required: true },
+    statusSince: { type: Date },
   },
   { timestamps: true },
 );
@@ -29,6 +32,8 @@ export interface RoomLike {
   floor: number;
   capacity?: number | null;
   type: string;
+  status?: string | null;
+  statusSince?: Date | null;
   building: { _id: Types.ObjectId; code: string; name: string };
 }
 
@@ -39,5 +44,7 @@ export const roomDto = (r: RoomLike) => ({
   floor: r.floor,
   capacity: r.capacity ?? null,
   type: r.type,
+  status: r.status ?? "free",
+  statusSince: r.statusSince ?? null,
   building: { id: String(r.building._id), code: r.building.code, name: r.building.name },
 });

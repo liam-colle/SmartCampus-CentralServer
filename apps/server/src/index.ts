@@ -4,6 +4,7 @@ import { createApp } from "./app.js";
 import { config } from "./config.js";
 import { attachGateway } from "./gateway/index.js";
 import { loadServerKey } from "./infra/serverKey.js";
+import { seedRoomStatuses } from "./domain/roomStatus.js";
 import { DeviceModel } from "./models/device.js";
 import { seedAdmin } from "./seed.js";
 
@@ -15,6 +16,7 @@ console.log("Connected to MongoDB");
 // Brings the device indexes in line with the schema (the enrollment flow changed their definition).
 await DeviceModel.syncIndexes();
 await seedAdmin();
+await seedRoomStatuses();
 
 const server = createApp().listen(config.PORT, () => {
   console.log(`Server listening on :${config.PORT} (${config.NODE_ENV}), device gateway on /ws/device`);
