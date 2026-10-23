@@ -30,16 +30,19 @@ Source of truth is the code; this is the map. Design rationale: `docs/SmartCampu
 | Direction | Type | Payload |
 | --- | --- | --- |
 | S to D | `session.ready` | `{desired, serverTime, pendingCommands}` |
-| S to D | `room.status.set` | `{roomId, status: free\|occupied\|reserved\|closed}` |
-| S to D | `display.config.set` | `{config}` |
-| S to D | `announce.show` | `{announcementId, title?, text, priority, expiresAt?}` |
-| S to D | `audio.play` | `{assetId, sha256, size}` (audio is downloaded over signed HTTPS, never carried here) |
+| S to D | `room.status.set` | `{roomId, status, label, color, icon, since?}`: the status key travels with its label, `#rrggbb` colour and an icon name (`STATUS_ICONS`), so a device needs no catalogue |
+| S to D | `room.info.set` | `{roomId, code, name, building, floor, capacity}`: what a door screen shows about its room |
+| S to D | `display.config.set` | `{config: {layout, theme, accentColor, show{...}, sleep{enabled, from, to}}}`, every field has a default |
+| S to D | `audio.settings.set` | `{volume 0-100, quietHours{enabled, from, to}}`: audio inside quiet hours is acknowledged, not played |
+| S to D | `announce.show` | `{announcementId, title?, text, priority: info\|important\|urgent, expiresAt?}`: the device hides it at `expiresAt` by itself |
+| S to D | `announce.clear` | `{announcementId}` |
+| S to D | `audio.play` | `{announcementId, title?, assetId, sha256, size}` (audio is downloaded over signed HTTPS, never carried here) |
 | S to D | `access.acl.sync` | `{rules: [{badgeUid, zones, validFrom?, validUntil?}]}` |
 | D to S | `ack` / `nack` | `{ref}` / `{ref, reason}` where `ref` is the command's envelope `id` |
 | D to S | `state.report` | `{state, telemetry?}` |
 | D to S | `event.badge` | `{badgeUid, at, granted?}` |
 
-Every type has a zod schema in `src/messages.ts`. The five command types (everything server to device except `session.ready`) must be acknowledged.
+Every type has a zod schema in `src/messages.ts`. Every server to device type except `session.ready` is a command and must be acknowledged. Time windows (`sleep`, `quietHours`) are local to the device and may cross midnight (`from` later than `to`).
 
 ## Delivery rules
 
@@ -60,3 +63,15 @@ Every type has a zod schema in `src/messages.ts`. The five command types (everyt
 4. Once `active`, the device completes the handshake above with the key it registered.
 
 Safeguards: per-address rate limit, a cap on pending requests, request expiry, a denied key is refused for an hour, an enrolled or revoked key cannot enroll again (generate a new one).
+
+## Signed asset download
+
+`audio.play` names an asset; the device fetches `GET /api/assets/:assetId/download` with three headers: `X-Device-Id`, `X-Timestamp`
+(ms since epoch) and `X-Signature` = base64 DER `ECDSA-P256-SHA256("smartcampus/v1/request\0" ‖ METHOD ‖ "\n" ‖ path ‖ "\n" ‖ timestamp)`,
+where `path` has no query string. The server refuses a timestamp more than 60 s off, and only serves an asset to a device that was
+sent `audio.play` for it. The device checks the SHA-256 from `audio.play` before caching or playing the file.
+
+## State a door unit reports
+
+`state.report {state}` from a door unit: `{roomStatus: key, announcements: [ids showing], configApplied: bool, screen: "on"|"sleep", volume, offlineSince?}`.
+The console draws its live preview from this and from the desired state; none of it is trusted for decisions on the server.

@@ -29,6 +29,8 @@ from .crypto import (
 )
 from .device import SimDevice, ws_url
 
+OCCUPIED = {"roomId": "B2-104", "status": "occupied", "label": "Occupied", "color": "#f5a524", "icon": "user"}
+
 
 class Runner:
     def __init__(self) -> None:
@@ -193,11 +195,11 @@ async def run(server: str, server_key_text: str, admin_email: str, admin_passwor
     async def deliver_and_ack():
         key, did, _ = await fleet.enroll()
         dev, _ = await fleet.online(key, did)
-        sent = await api(admin.send_command, did, "room.status.set", {"roomId": "B2-104", "status": "occupied"})
+        sent = await api(admin.send_command, did, "room.status.set", OCCUPIED)
         expect(sent["delivered"] is True, "device is online, command should be delivered right away")
         msg = await dev.recv_message()
         expect(msg["type"] == "room.status.set" and msg["id"] == sent["id"], "wrong command received")
-        expect(msg["payload"] == {"roomId": "B2-104", "status": "occupied"}, "payload altered")
+        expect(msg["payload"] == OCCUPIED, "payload altered")
         await dev.send_message("ack", {"ref": msg["id"]})
         await asyncio.sleep(0.3)
         status = {c["id"]: c["status"] for c in await api(admin.commands, did)}
@@ -209,7 +211,7 @@ async def run(server: str, server_key_text: str, admin_email: str, admin_passwor
     async def offline_replay():
         key, did, _ = await fleet.enroll()
         c1 = await api(admin.send_command, did, "announce.show", {"announcementId": "a1", "text": "Fire drill at 10:00"})
-        c2 = await api(admin.send_command, did, "room.status.set", {"roomId": "B2-104", "status": "closed"})
+        c2 = await api(admin.send_command, did, "room.status.set", {**OCCUPIED, "status": "closed", "label": "Closed"})
         expect(c1["delivered"] is False, "offline device: command must wait in the outbox")
 
         dev, ready = await fleet.online(key, did)
@@ -231,7 +233,7 @@ async def run(server: str, server_key_text: str, admin_email: str, admin_passwor
 
     async def desired_state():
         key, did, _ = await fleet.enroll()
-        await api(admin.send_command, did, "room.status.set", {"roomId": "B2-104", "status": "reserved"})
+        await api(admin.send_command, did, "room.status.set", {**OCCUPIED, "status": "reserved", "label": "Reserved"})
         dev, ready = await fleet.online(key, did)
         expect(
             ready["payload"]["desired"].get("roomStatus", {}).get("status") == "reserved",
@@ -248,7 +250,7 @@ async def run(server: str, server_key_text: str, admin_email: str, admin_passwor
 
     async def invalid_command():
         _, did, _ = await fleet.enroll()
-        for type_, payload in (("room.status.set", {"roomId": "r", "status": "exploded"}), ("self.destruct", {}), ("audio.play", {"assetId": "a", "sha256": "zz", "size": 1})):
+        for type_, payload in (("room.status.set", {**OCCUPIED, "status": "Not A Key"}), ("self.destruct", {}), ("audio.play", {"announcementId": "n", "assetId": "a", "sha256": "zz", "size": 1})):
             try:
                 await api(admin.send_command, did, type_, payload)
                 raise AssertionError(f"{type_} with an invalid payload must be refused")
@@ -379,7 +381,7 @@ async def run(server: str, server_key_text: str, admin_email: str, admin_passwor
     async def wrong_direction():
         key, did, _ = await fleet.enroll()
         dev = await live(key, did)
-        await dev.send_message("room.status.set", {"roomId": "r", "status": "free"})  # a server->device type
+        await dev.send_message("room.status.set", {**OCCUPIED, "status": "free"})  # a server->device type
         await expect_protocol_error(dev, "wrong direction")
 
     await r.check("device sending a server-only message type -> 4400", wrong_direction)
@@ -396,7 +398,7 @@ async def run(server: str, server_key_text: str, admin_email: str, admin_passwor
     async def other_device_ack():
         ka, a, _ = await fleet.enroll()
         kb, b, _ = await fleet.enroll()
-        c = await api(admin.send_command, a, "room.status.set", {"roomId": "r", "status": "free"})
+        c = await api(admin.send_command, a, "room.status.set", {**OCCUPIED, "status": "free"})
         devb = await live(kb, b)
         await devb.send_message("ack", {"ref": c["id"]})
         await asyncio.sleep(0.3)

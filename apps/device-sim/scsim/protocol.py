@@ -21,7 +21,16 @@ CLOSE_REPLACED = 4409
 CLOSE_PING_TIMEOUT = 4410
 CLOSE_RATE_LIMITED = 4429
 
-COMMAND_TYPES = {"room.status.set", "display.config.set", "announce.show", "audio.play", "access.acl.sync"}
+COMMAND_TYPES = {
+    "room.status.set",
+    "room.info.set",
+    "display.config.set",
+    "audio.settings.set",
+    "announce.show",
+    "announce.clear",
+    "audio.play",
+    "access.acl.sync",
+}
 
 _ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford base32
 ULID_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")

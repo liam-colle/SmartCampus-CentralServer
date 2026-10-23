@@ -17,8 +17,72 @@ const msg = <T extends string, P extends z.ZodTypeAny>(type: T, payload: P) =>
 
 const record = z.record(z.string(), z.unknown());
 
-export const ROOM_STATUSES = ["free", "occupied", "reserved", "closed"] as const;
-export const ANNOUNCE_PRIORITIES = ["low", "normal", "high", "emergency"] as const;
+export const ANNOUNCE_PRIORITIES = ["info", "important", "urgent"] as const;
+
+/** Icons a status may use. Devices map each name to a drawable they ship with. */
+export const STATUS_ICONS = [
+  "check",
+  "user",
+  "lock",
+  "wrench",
+  "calendar",
+  "clock",
+  "alert",
+  "info",
+  "book",
+  "coffee",
+  "ban",
+  "wifi-off",
+] as const;
+
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "expected a colour like #00a86b");
+const hourMinute = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:MM");
+
+/** Machine key of a status, e.g. "free" or "exam-in-progress". */
+export const statusKey = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/);
+
+/**
+ * A status travels with its label, colour and icon, so a door unit never needs the catalogue and
+ * keeps showing the right thing for a status created after it was installed.
+ */
+export const roomStatusValue = z.object({
+  roomId: z.string().min(1).max(64),
+  status: statusKey,
+  label: z.string().trim().min(1).max(40),
+  color: hexColor,
+  icon: z.enum(STATUS_ICONS),
+  /** When the status was set (ms since epoch). */
+  since: z.number().int().nonnegative().optional(),
+});
+
+export const DISPLAY_LAYOUTS = ["standard", "compact", "split"] as const;
+export const DISPLAY_THEMES = ["dark", "light"] as const;
+
+/** Night sleep and quiet hours share this shape. `from` > `to` means the window crosses midnight. */
+export const timeWindow = z.object({
+  enabled: z.boolean().default(false),
+  from: hourMinute.default("22:00"),
+  to: hourMinute.default("06:00"),
+});
+
+/** What a door screen shows and how. Every field has a default so a partial config is valid. */
+export const displayConfig = z.object({
+  layout: z.enum(DISPLAY_LAYOUTS).default("standard"),
+  theme: z.enum(DISPLAY_THEMES).default("dark"),
+  accentColor: hexColor.default("#00a86b"),
+  show: z
+    .object({
+      roomName: z.boolean().default(true),
+      building: z.boolean().default(true),
+      floor: z.boolean().default(true),
+      capacity: z.boolean().default(true),
+      clock: z.boolean().default(true),
+      announcements: z.boolean().default(true),
+    })
+    .default({}),
+  sleep: timeWindow.default({}),
+});
+export type DisplayConfig = z.infer<typeof displayConfig>;
 
 // ---- Server -> device ------------------------------------------------------------------
 
@@ -34,12 +98,28 @@ export const sessionReady = msg(
   }),
 );
 
-export const roomStatusSet = msg(
-  "room.status.set",
-  z.object({ roomId: z.string().min(1).max(64), status: z.enum(ROOM_STATUSES) }),
+export const roomStatusSet = msg("room.status.set", roomStatusValue);
+
+/** Static facts about the room a door screen is linked to. */
+export const roomInfoSet = msg(
+  "room.info.set",
+  z.object({
+    roomId: z.string().min(1).max(64),
+    code: z.string().min(1).max(30),
+    name: z.string().max(100),
+    building: z.string().max(100),
+    floor: z.number().int(),
+    capacity: z.number().int().nonnegative().nullable(),
+  }),
 );
 
-export const displayConfigSet = msg("display.config.set", z.object({ config: record }));
+export const displayConfigSet = msg("display.config.set", z.object({ config: displayConfig }));
+
+/** Per-device speaker settings. Audio that arrives inside quiet hours is acknowledged but not played. */
+export const audioSettingsSet = msg(
+  "audio.settings.set",
+  z.object({ volume: z.number().int().min(0).max(100), quietHours: timeWindow }),
+);
 
 export const announceShow = msg(
   "announce.show",
@@ -47,15 +127,20 @@ export const announceShow = msg(
     announcementId: z.string().min(1).max(64),
     title: z.string().max(200).optional(),
     text: z.string().min(1).max(2000),
-    priority: z.enum(ANNOUNCE_PRIORITIES).default("normal"),
+    priority: z.enum(ANNOUNCE_PRIORITIES).default("info"),
+    /** Absolute time (ms since epoch). The device hides the announcement by itself, even offline. */
     expiresAt: z.number().int().optional(),
   }),
 );
+
+export const announceClear = msg("announce.clear", z.object({ announcementId: z.string().min(1).max(64) }));
 
 /** Audio never travels in JSON: the device downloads `assetId` over signed HTTPS and checks the hash. */
 export const audioPlay = msg(
   "audio.play",
   z.object({
+    announcementId: z.string().min(1).max(64),
+    title: z.string().max(200).optional(),
     assetId: z.string().min(1).max(64),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
     size: z.number().int().positive(),
@@ -102,8 +187,11 @@ export const eventBadge = msg(
 export const serverMessage = z.discriminatedUnion("type", [
   sessionReady,
   roomStatusSet,
+  roomInfoSet,
   displayConfigSet,
+  audioSettingsSet,
   announceShow,
+  announceClear,
   audioPlay,
   accessAclSync,
 ]);
@@ -118,8 +206,11 @@ export type DeviceMessageType = DeviceMessage["type"];
 /** Server messages that must be acknowledged by the device and therefore go through the outbox. */
 export const COMMAND_TYPES = [
   "room.status.set",
+  "room.info.set",
   "display.config.set",
+  "audio.settings.set",
   "announce.show",
+  "announce.clear",
   "audio.play",
   "access.acl.sync",
 ] as const satisfies readonly ServerMessageType[];
